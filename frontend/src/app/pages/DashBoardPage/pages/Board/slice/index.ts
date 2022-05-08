@@ -24,6 +24,7 @@ import {
   WidgetData,
   WidgetInfo,
 } from 'app/pages/DashBoardPage/pages/Board/slice/types';
+import { Widget } from 'app/pages/DashBoardPage/types/widgetTypes';
 import ChartDataView from 'app/types/ChartDataView';
 import { useInjectReducer } from 'utils/@reduxjs/injectReducer';
 import { createSlice } from 'utils/@reduxjs/toolkit';
@@ -34,7 +35,7 @@ import {
   getChartWidgetDataAsync,
   getControllerOptions,
 } from './thunk';
-import { BoardInfo, BoardState, Widget } from './types';
+import { BoardInfo, BoardState } from './types';
 
 export const boardInit: BoardState = {
   boardRecord: {} as Record<string, Dashboard>,

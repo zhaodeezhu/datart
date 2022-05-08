@@ -17,7 +17,8 @@
  */
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { boardDrillManager } from 'app/pages/DashBoardPage/components/BoardDrillManager/BoardDrillManager';
-import { getControlOptionQueryParams } from 'app/pages/DashBoardPage/utils/widgetToolKit/chart';
+import { getControlOptionQueryParams } from 'app/pages/DashBoardPage/components/Widgets/ControllerWidget/controllerConfig';
+import { Widget } from 'app/pages/DashBoardPage/types/widgetTypes';
 import { FilterSearchParams } from 'app/pages/MainPage/pages/VizPage/slice/types';
 import { shareActions } from 'app/pages/SharePage/slice';
 import { ExecuteToken, ShareVizInfo } from 'app/pages/SharePage/slice/types';
@@ -37,7 +38,6 @@ import {
   getDataOption,
   ServerDashboard,
   VizRenderMode,
-  Widget,
   WidgetData,
 } from './types';
 
@@ -145,7 +145,7 @@ export const renderedWidgetAsync = createAsyncThunk<
   async ({ boardId, widgetId, renderMode }, { getState, dispatch }) => {
     const widgetMapMap = selectBoardWidgetMap(getState());
     const widgetMap = widgetMapMap?.[boardId];
-    const curWidget = widgetMap?.[widgetId];
+    const curWidget = widgetMap?.[widgetId] as any;
     if (!curWidget) return null;
     // 1 widget render
     dispatch(boardActions.renderedWidgets({ boardId, widgetIds: [widgetId] }));

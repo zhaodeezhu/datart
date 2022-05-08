@@ -21,10 +21,11 @@ import {
   BorderConfig,
   JumpTargetType,
 } from 'app/pages/DashBoardPage/pages/Board/slice/types';
-import { FilterSqlOperator } from 'globalConstants';
+import { FilterSqlOperator, TIME_FORMATTER } from 'globalConstants';
 import i18next from 'i18next';
 import { PRIMARY, WHITE } from 'styles/StyleConstants';
 import { WidgetType } from './pages/Board/slice/types';
+import { ITimeDefault } from './types/widgetTypes';
 export const WIDGET_DRAG_HANDLE = 'widget-draggableHandle';
 export const BOARD_FILE_IMG_PREFIX = 'resources/image/dashboard/';
 export const BASE_VIEW_WIDTH = 1024;
@@ -87,7 +88,10 @@ export const QueryButtonWidgetBackgroundDefault: BackgroundConfig = {
   ...BackgroundDefault,
   color: PRIMARY,
 };
-
+export const TimeDefault: ITimeDefault = {
+  format: TIME_FORMATTER,
+  duration: 1000,
+};
 export const BorderDefault: BorderConfig = {
   radius: 1,
   width: 1,
@@ -101,19 +105,8 @@ export const ButtonBorderDefault: BorderConfig = {
 };
 
 export const CanDropToWidgetTypes: readonly WidgetType[] = ['chart', 'media'];
-export const CanFullScreenWidgetTypes: readonly Partial<WidgetType>[] = [
-  'chart',
-  'media',
-  'container',
-];
 
 export const CONTAINER_TAB = 'containerTab';
-
-//
-export const NeedFetchWidgetTypes: readonly WidgetType[] = [
-  'chart',
-  'controller',
-];
 
 // setting
 

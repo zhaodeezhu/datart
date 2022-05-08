@@ -48,13 +48,13 @@ import {
   ControllerWidgetContent,
   DataChart,
   getDataOption,
-  Widget,
   WidgetInfo,
 } from '../pages/Board/slice/types';
 import {
   ControllerConfig,
   ControllerDate,
 } from '../pages/BoardEditor/components/ControllerWidgetPanel/types';
+import { Widget } from '../types/widgetTypes';
 import { DateControllerTypes } from './../pages/BoardEditor/components/ControllerWidgetPanel/constants';
 import { PickerType } from './../pages/BoardEditor/components/ControllerWidgetPanel/types';
 import { getLinkedColumn } from './widget';
@@ -518,19 +518,17 @@ export const getDefaultWidgetName = (
   subWidgetType: string,
   index: number,
 ) => {
-  const typeTitle = i18next.t(`viz.widget.type.${widgetType}`);
   const subTypeTitle = i18next.t(`viz.widget.type.${subWidgetType}`);
   const widgetTypes: WidgetType[] = [
     'chart',
     'container',
     'controller',
     'media',
+    'button',
   ];
-  const BtnTypes: WidgetType[] = ['query', 'reset'];
+
   if (widgetTypes.includes(widgetType)) {
     return `${subTypeTitle}_${index}`;
-  } else if (BtnTypes.includes(widgetType)) {
-    return `${typeTitle}`;
   } else {
     return `xxx${index}`;
   }

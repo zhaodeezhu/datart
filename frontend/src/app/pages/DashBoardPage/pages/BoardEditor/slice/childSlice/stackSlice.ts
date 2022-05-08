@@ -17,16 +17,16 @@
  */
 
 import { PayloadAction } from '@reduxjs/toolkit';
+import { getWidgetTitle } from 'app/pages/DashBoardPage/components/WidgetManager/utils/utils';
 import {
   ContainerItem,
-  ContainerWidgetContent,
   Dashboard,
   DeviceType,
   MediaWidgetContent,
-  Widget,
-  WidgetConf,
+  RectConfig,
+  TabWidgetContent,
 } from 'app/pages/DashBoardPage/pages/Board/slice/types';
-import { getDefaultWidgetName } from 'app/pages/DashBoardPage/utils';
+import { Widget, WidgetConf } from 'app/pages/DashBoardPage/types/widgetTypes';
 import { Variable } from 'app/pages/MainPage/pages/VariablePage/slice/types';
 import { ChartStyleConfig } from 'app/types/ChartConfig';
 import { updateCollectionByAction } from 'app/utils/mutation';
@@ -95,15 +95,24 @@ export const editBoardStackSlice = createSlice({
         maxWidgetIndex++;
         const widget = produce(ele, draft => {
           draft.config.index = maxWidgetIndex;
-          draft.config.name =
-            ele.config.name ||
-            getDefaultWidgetName(
-              ele.config.type,
-              ele.config.content.type,
-              maxWidgetIndex,
-            );
+          //  draft.config.name =
+          //    ele.config.name ||
+          //    getDefaultWidgetName(
+          //      ele.config.type,
+          //      ele.config.content.type,
+          //      maxWidgetIndex,
+          //    );
         });
-        state.widgetRecord[widget.id] = widget;
+        state.widgetRecord[widget.id] = widget as any;
+        //  ele.config.index = maxWidgetIndex;
+        // ele.config.name =
+        //   ele.config.name ||
+        //   getDefaultWidgetName(
+        //     ele.config.type,
+        //     ele.config.content.type,
+        //     maxWidgetIndex,
+        //   );
+        // state.widgetRecord[ele.id] = ele;
       });
       state.dashBoard.config.maxWidgetIndex = maxWidgetIndex;
     },
@@ -127,6 +136,38 @@ export const editBoardStackSlice = createSlice({
     updateWidget(state, action: PayloadAction<Widget>) {
       const widget = action.payload;
       state.widgetRecord[widget.id] = widget;
+    },
+    updateWidgetConfigByKey(
+      state,
+      action: PayloadAction<{
+        wid: string;
+        ancestors: number[];
+        configItem: ChartStyleConfig;
+      }>,
+    ) {
+      const { ancestors, configItem, wid } = action.payload;
+      if (!state.widgetRecord[wid]) return;
+      const newProps = updateCollectionByAction(
+        state.widgetRecord[wid].config.jsonConfig.props || [],
+        {
+          ancestors: ancestors!,
+          value: configItem,
+        },
+      );
+      state.widgetRecord[wid].config.jsonConfig.props = newProps;
+      const title = getWidgetTitle(newProps);
+      state.widgetRecord[wid].config.name = title.title;
+    },
+    updateWidgetRect(
+      state,
+      action: PayloadAction<{
+        wid: string;
+        newRect: RectConfig;
+      }>,
+    ) {
+      const { wid, newRect } = action.payload;
+      if (!state.widgetRecord[wid]) return;
+      state.widgetRecord[wid].config.rect = newRect;
     },
     updateWidgetConfig(
       state,
@@ -162,7 +203,7 @@ export const editBoardStackSlice = createSlice({
           state.widgetRecord[i].config.rect = rectItem;
         }
         if (deviceType === DeviceType.Mobile) {
-          state.widgetRecord[i].config.mobileRect = rectItem;
+          state.widgetRecord[i].config.mRect = rectItem;
         }
       });
     },
@@ -194,7 +235,7 @@ export const editBoardStackSlice = createSlice({
       });
     },
 
-    addWidgetToContainerWidget(
+    addWidgetToTabWidget(
       state,
       action: PayloadAction<{
         parentId: string;
@@ -203,16 +244,20 @@ export const editBoardStackSlice = createSlice({
       }>,
     ) {
       const { parentId, tabItem, sourceId } = action.payload;
-      const tabsContainerConfig = state.widgetRecord[parentId].config
-        .content as ContainerWidgetContent;
-      const sourceWidget = state.widgetRecord[sourceId];
-
-      tabsContainerConfig.itemMap[tabItem.tabId].name =
-        sourceWidget.config.name;
-      tabsContainerConfig.itemMap[tabItem.tabId].childWidgetId =
-        sourceWidget.id;
+      const tabContent = state.widgetRecord[parentId].config
+        .content as TabWidgetContent;
+      const sourceWidget = state.widgetRecord[sourceId] as unknown as Widget;
+      let tabName =
+        getWidgetTitle(sourceWidget.config?.jsonConfig?.props).title || 'tab*';
+      tabContent.itemMap[sourceWidget.config.clientId] = {
+        ...tabItem,
+        name: tabName,
+        tabId: sourceWidget.config.clientId,
+        childWidgetId: sourceWidget.id,
+      };
+      delete state.widgetRecord[parentId].config.content.itemMap[tabItem.tabId];
+      state.widgetRecord[parentId].config.content = tabContent;
       state.widgetRecord[sourceId].parentId = parentId;
-      state.widgetRecord[sourceId].config.tabId = tabItem.tabId;
     },
     /* tabs widget */
     tabsWidgetAddTab(
@@ -224,9 +269,9 @@ export const editBoardStackSlice = createSlice({
     ) {
       const { parentId, tabItem } = action.payload;
 
-      const tabsContainerConfig = state.widgetRecord[parentId].config
-        .content as ContainerWidgetContent;
-      tabsContainerConfig.itemMap[tabItem.tabId] = tabItem;
+      const tabContent = state.widgetRecord[parentId].config
+        .content as TabWidgetContent;
+      tabContent.itemMap[tabItem.tabId] = tabItem;
     },
     tabsWidgetRemoveTab(
       state,
@@ -237,25 +282,26 @@ export const editBoardStackSlice = createSlice({
       }>,
     ) {
       const { parentId, sourceTabId, mode } = action.payload;
-      const tabsContainerConfig = state.widgetRecord[parentId].config
-        .content as ContainerWidgetContent;
-      const sourceWidgetId =
-        tabsContainerConfig.itemMap[sourceTabId].childWidgetId;
-      delete tabsContainerConfig.itemMap[sourceTabId];
+      const tabContent = state.widgetRecord[parentId].config
+        .content as TabWidgetContent;
+
+      const tabItem = tabContent.itemMap[sourceTabId];
 
       const rt = state.widgetRecord[parentId].config.rect;
-      if (state.widgetRecord[sourceWidgetId]) {
+      delete tabContent.itemMap[sourceTabId];
+      if (state.widgetRecord[tabItem.childWidgetId]) {
         if (mode === 'auto') {
-          state.widgetRecord[sourceWidgetId].config.rect = rt;
+          state.widgetRecord[tabItem.childWidgetId].config.rect = rt;
         }
         if (mode === 'free') {
-          state.widgetRecord[sourceWidgetId].config.rect = {
+          state.widgetRecord[tabItem.childWidgetId].config.rect = {
             ...rt,
             x: rt.x + 30,
             y: rt.y + 30,
           };
         }
-        state.widgetRecord[sourceWidgetId].parentId = '';
+
+        state.widgetRecord[tabItem.childWidgetId].parentId = '';
       }
     },
     /* MediaWidgetConfig */

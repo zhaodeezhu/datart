@@ -15,8 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { ControllerFacadeTypes } from 'app/constants';
 import { memo, useContext } from 'react';
-import { BoardType, MediaWidgetType } from '../../pages/Board/slice/types';
+import { Widget } from '../../types/widgetTypes';
 import { WidgetDataProvider } from '../WidgetProvider/WidgetDataProvider';
 import { WidgetContext } from '../WidgetProvider/WidgetProvider';
 import { ControllerWidget } from '../Widgets/ControllerWidget/ControllerWidget';
@@ -31,14 +32,15 @@ import { TimerWidget } from '../Widgets/TimerWidget/TimerWidget';
 import { VideoWidget } from '../Widgets/VideoWidget/VideoWidget';
 
 export const WidgetMapper: React.FC<{
-  boardType: BoardType;
   boardEditing: boolean;
+  hideTitle: boolean;
 }> = memo(({ boardEditing }) => {
-  const widget = useContext(WidgetContext);
-  const widgetType = widget.config.type;
-
-  switch (widgetType) {
-    case 'chart':
+  const widget = useContext(WidgetContext) as unknown as Widget;
+  const widgetTypeId = widget.config.widgetTypeId;
+  switch (widgetTypeId) {
+    // chart
+    case 'linkChart':
+    case 'selfChart':
       return (
         <WidgetDataProvider
           widgetId={widget.id}
@@ -48,35 +50,7 @@ export const WidgetMapper: React.FC<{
           <DataChartWidget hideTitle={false} />
         </WidgetDataProvider>
       );
-    case 'media':
-      const mediaSubType: MediaWidgetType = widget.config.content.type;
-      return <MediaWidgetMapper subType={mediaSubType} />;
-    case 'container':
-      // const containerSubType: MediaWidgetType = widget.config.content.type;
-      return <TabWidget hideTitle={false} />;
-    case 'controller':
-      return (
-        <WidgetDataProvider
-          widgetId={widget.id}
-          boardId={widget.dashboardId}
-          boardEditing={boardEditing}
-        >
-          <ControllerWidget />
-        </WidgetDataProvider>
-      );
-    case 'query':
-      return <QueryBtnWidget />;
-    case 'reset':
-      return <ResetBtnWidget />;
-    default:
-      return <div>default widget</div>;
-  }
-});
-
-export const MediaWidgetMapper: React.FC<{
-  subType: MediaWidgetType;
-}> = memo(({ subType }) => {
-  switch (subType) {
+    // media
     case 'richText':
       return <RichTextWidget hideTitle={false} />;
     case 'image':
@@ -87,7 +61,40 @@ export const MediaWidgetMapper: React.FC<{
       return <IframeWidget hideTitle={false} />;
     case 'timer':
       return <TimerWidget hideTitle={false} />;
+
+    // tab
+    case 'tab':
+      return <TabWidget hideTitle={false} />;
+
+    // btn
+    case 'queryBtn':
+      return <QueryBtnWidget />;
+    case 'resetBtn':
+      return <ResetBtnWidget />;
+    // controller
+    case ControllerFacadeTypes.DropdownList:
+    case ControllerFacadeTypes.MultiDropdownList:
+    case ControllerFacadeTypes.CheckboxGroup:
+    case ControllerFacadeTypes.RadioGroup:
+    case ControllerFacadeTypes.Text:
+    case ControllerFacadeTypes.Time:
+    case ControllerFacadeTypes.RangeTime:
+    case ControllerFacadeTypes.RangeValue:
+    case ControllerFacadeTypes.Value:
+    case ControllerFacadeTypes.Slider:
+      return (
+        <WidgetDataProvider
+          widgetId={widget.id}
+          boardId={widget.dashboardId}
+          boardEditing={boardEditing}
+        >
+          <ControllerWidget />
+        </WidgetDataProvider>
+      );
+    //RangeSlider
+    //Tree
+    // unknown
     default:
-      return <div>default media</div>;
+      return <div> unknown widget ? </div>;
   }
 });
