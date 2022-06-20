@@ -150,6 +150,7 @@ export const widgetClickJumpAction =
     ) {
       return;
     }
+
     const rowDataValue = getValueByRowData(params.data, jumpFieldName);
     console.warn(' jumpValue:', rowDataValue);
     console.warn('rowData', params.data?.rowData);
@@ -203,16 +204,18 @@ export const widgetLinkEventAction =
         return targetLinkDataChartIds.includes(v.datachartId);
       })
       .map(([k, v]) => v);
+
     boardLinkWidgets.forEach(w => {
       const filterObj = params?.find(
         p => p?.rule?.relId === w.datachartId,
       )?.filters;
+
       const clickFilters: ChartDataRequestFilter[] = Object.entries(
         filterObj || {},
       ).map(([k, v]) => {
         return {
           sqlOperator: FilterSqlOperator.In,
-          column: k,
+          column: JSON.parse(k),
           values: (v as any)?.map(vv => ({ value: vv, valueType: 'STRING' })),
         };
       });
@@ -344,7 +347,7 @@ export const widgetChartClickAction =
     params: ChartMouseEventParams;
     history: any;
   }) =>
-  (dispatch, getState) => {
+  dispatch => {
     const { boardId, editing, renderMode, widget, params, history } = obj;
     //is tableChart
     if (
