@@ -205,14 +205,26 @@ module.exports = {
       });
     },
     hot: true,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Credentials': true
+    },
     proxy: {
       '/api/v1': {
         changeOrigin: true,
-        target: 'http://localhost:8080/',
+        "secure": false,
+        target: 'http://10.10.12.136:11111',
+        // pathRewrite: {
+        //   "^/api": ''
+        // }
       },
       '/resources': {
         changeOrigin: true,
-        target: 'http://localhost:8080/',
+        "secure": false,
+        target: 'http://10.10.12.136:11111',
+        // pathRewrite: {
+        //   "^/api": ''
+        // }
       },
     },
     historyApiFallback: {
