@@ -20,11 +20,22 @@ import {
   FormOutlined,
   InfoCircleOutlined,
   MoreOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
-import { Button, Menu, message, Space, Tooltip, TreeSelect } from 'antd';
-import { MenuListItem, Popup, ToolbarButton } from 'app/components';
+import {
+  Button,
+  Input,
+  Menu,
+  message,
+  Popover,
+  Space,
+  Tooltip,
+  TreeSelect,
+} from 'antd';
+import { MenuListItem, ToolbarButton } from 'app/components';
 import { Confirm, ConfirmProps } from 'app/components/Confirm';
 import { ChartDataViewFieldCategory } from 'app/constants';
+import { useDebouncedSearch } from 'app/hooks/useDebouncedSearch';
 import useI18NPrefix from 'app/hooks/useI18NPrefix';
 import useMount from 'app/hooks/useMount';
 import useStateModal, { StateModalSize } from 'app/hooks/useStateModal';
@@ -59,7 +70,13 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { useHistory } from 'react-router';
 import styled from 'styled-components/macro';
-import { ORANGE, SPACE, SPACE_XS } from 'styles/StyleConstants';
+import {
+  ORANGE,
+  SPACE,
+  SPACE_MD,
+  SPACE_TIMES,
+  SPACE_XS,
+} from 'styles/StyleConstants';
 import { getPath, modelListFormsTreeByTableName } from 'utils/utils';
 import { getAllFieldsOfEachType } from '../../utils';
 import { ChartDraggableSourceGroupContainer } from '../ChartDraggable';
@@ -72,6 +89,7 @@ const ChartDataViewPanel: FC<{
   onDataViewChange?: (clear?: boolean) => void;
 }> = memo(({ dataView, defaultViewId, chartConfig, onDataViewChange }) => {
   const t = useI18NPrefix(`viz.workbench.dataview`);
+  const tView = useI18NPrefix('view');
   const dispatch = useDispatch();
   const history = useHistory();
   const [showModal, modalContextHolder] = useStateModal({});
@@ -85,9 +103,10 @@ const ChartDataViewPanel: FC<{
 
   const [isDisplayAddNewModal, setIsDisplayAddNewModal] = useToggle();
   const views = useSelector(dataviewsSelector);
-  const [allMetaFields, setAllMetaFields] = useState<any>([]);
+  const [allMetaFields, setAllMetaFields] = useState<ChartDataViewMeta[]>([]);
   const [isGroup, setIsGroup] = useState<boolean>(true);
   const [sortType, setSortType] = useState<string>('byNameSort');
+  const [isShowSearch, setIsShowSearch] = useState<boolean>(false);
 
   const path = useMemo(() => {
     return views?.length && dataView
@@ -112,6 +131,11 @@ const ChartDataViewPanel: FC<{
     level: PermissionLevels.Enable,
   })(true);
 
+  const { filteredData: filteredTreeData, debouncedSearch: treeSearch } =
+    useDebouncedSearch(allMetaFields, (keywords, d) => {
+      return d?.name.toLowerCase().includes(keywords.toLowerCase());
+    });
+
   const handleDataViewChange = useCallback(
     value => {
       if (dataView?.id === value) {
@@ -127,7 +151,7 @@ const ChartDataViewPanel: FC<{
           footer: (
             <Space>
               <Button onClick={() => setConfirmProps({ visible: false })}>
-                {'取消'}
+                {t('cancel')}
               </Button>
               <Button
                 onClick={() => {
@@ -136,7 +160,7 @@ const ChartDataViewPanel: FC<{
                   dispatch(fetchViewDetailAction(value));
                 }}
               >
-                {'清空'}
+                {t('empty')}
               </Button>
               <Button
                 onClick={() => {
@@ -146,7 +170,7 @@ const ChartDataViewPanel: FC<{
                 }}
                 type="primary"
               >
-                {'保留'}
+                {t('reserve')}
               </Button>
             </Space>
           ),
@@ -171,37 +195,27 @@ const ChartDataViewPanel: FC<{
         return Promise.reject('field is empty');
       }
 
-      let validComputedField = true;
       try {
-        validComputedField = await checkComputedFieldAsync(
-          dataView?.sourceId,
-          field.expression,
-        );
+        await checkComputedFieldAsync(dataView?.sourceId, field.expression);
       } catch (error) {
-        validComputedField = false;
+        message.error(error as any);
+        return;
       }
 
-      if (!validComputedField) {
-        message.error('validate function computed field failed');
-        return Promise.reject('validate function computed field failed');
-      }
       const otherComputedFields = dataView?.computedFields?.filter(
-        f => f.id !== originId,
+        f => f.name !== originId,
       );
       const isNameConflict = !!otherComputedFields?.find(
-        f => f.id === field?.id,
+        f => f.name === field?.name,
       );
       if (isNameConflict) {
-        message.error(
-          'The computed field has already been exist, please choose another one!',
-        );
-        return Promise.reject(
-          'The computed field has already been exist, please choose another one!',
-        );
+        const nameConflictError = tView('computedFieldNameExistWarning');
+        message.error(nameConflictError);
+        return Promise.reject(nameConflictError);
       }
 
       const currentFieldIndex = (dataView?.computedFields || []).findIndex(
-        f => f.id === originId,
+        f => f.name === originId,
       );
 
       if (currentFieldIndex >= 0) {
@@ -226,12 +240,12 @@ const ChartDataViewPanel: FC<{
         ),
       );
     },
-    [dispatch, dataView?.computedFields, dataView?.sourceId],
+    [dataView?.computedFields, dataView?.sourceId, dispatch, tView],
   );
 
   const handleDeleteComputedField = fieldId => {
     const newComputedFields = (dataView?.computedFields || []).filter(
-      f => f.id !== fieldId,
+      f => f.name !== fieldId,
     );
 
     dispatch(
@@ -243,7 +257,7 @@ const ChartDataViewPanel: FC<{
 
   const handleEditComputedField = fieldId => {
     const editField = (dataView?.computedFields || []).find(
-      f => f.id === fieldId,
+      f => f.name === fieldId,
     );
 
     handleAddOrEditComputedField(editField);
@@ -295,7 +309,7 @@ const ChartDataViewPanel: FC<{
   );
 
   const handleAddOrEditComputedField = useCallback(
-    field => {
+    (field?: ChartDataViewMeta) => {
       (showModal as Function)({
         title: t('createComputedFields'),
         modalSize: StateModalSize.MIDDLE,
@@ -313,7 +327,7 @@ const ChartDataViewPanel: FC<{
           />
         ),
         onOk: newField =>
-          handleAddNewOrUpdateComputedField(newField, field?.id),
+          handleAddNewOrUpdateComputedField(newField, field?.name),
         onButtonProps: { display: field?.isViewComputedFields },
       });
     },
@@ -420,7 +434,7 @@ const ChartDataViewPanel: FC<{
       switch (key) {
         case 'createComputedFields':
           setIsDisplayAddNewModal();
-          handleAddOrEditComputedField(null);
+          handleAddOrEditComputedField();
           break;
         case 'byGroup':
           setIsGroup(true);
@@ -438,6 +452,10 @@ const ChartDataViewPanel: FC<{
           setSortType(key);
           buildAllMetaFields(isGroup, key);
           break;
+        case 'searchField':
+          setIsDisplayAddNewModal();
+          setIsShowSearch(!isShowSearch);
+          break;
         default:
           break;
       }
@@ -448,6 +466,7 @@ const ChartDataViewPanel: FC<{
       buildAllMetaFields,
       isGroup,
       sortType,
+      isShowSearch,
     ],
   );
 
@@ -483,11 +502,12 @@ const ChartDataViewPanel: FC<{
           filterTreeNode={filterDateViewTreeNode}
           bordered={false}
         />
-        <Popup
+        <Popover
           placement="bottomRight"
           visible={isDisplayAddNewModal}
           onVisibleChange={() => setIsDisplayAddNewModal()}
           trigger="click"
+          overlayClassName="datart-popup"
           content={
             <Menu
               onClick={handleClickMenu}
@@ -496,6 +516,7 @@ const ChartDataViewPanel: FC<{
                 isGroup ? 'byGroup' : 'byNoGroup',
               ]}
             >
+              <MenuListItem key="searchField">{t('searchField')}</MenuListItem>
               <MenuListItem key="createComputedFields">
                 {t('createComputedFields')}
               </MenuListItem>
@@ -520,13 +541,23 @@ const ChartDataViewPanel: FC<{
           }
         >
           <ToolbarButton icon={<MoreOutlined />} size="small" />
-        </Popup>
+        </Popover>
         {modalContextHolder}
       </Header>
+      <StyleSearchbar visible={isShowSearch}>
+        <Input
+          autoFocus
+          className="search-input"
+          prefix={<SearchOutlined className="icon" />}
+          placeholder={t('searchField')}
+          bordered={false}
+          onChange={treeSearch}
+        />
+      </StyleSearchbar>
       <Confirm {...confirmProps} />
 
       <ChartDraggableSourceGroupContainer
-        meta={allMetaFields}
+        meta={filteredTreeData as ChartDataViewMeta[]}
         onDeleteComputedField={handleDeleteComputedField}
         onEditComputedField={handleEditComputedField}
       />
@@ -551,5 +582,20 @@ const Header = styled.div`
 
   .view-selector {
     flex: 1;
+    overflow: hidden;
+  }
+`;
+
+const StyleSearchbar = styled.div<{ visible: boolean }>`
+  display: ${p => (p.visible ? 'block' : 'none')};
+  padding: ${SPACE} 0;
+
+  .search-input {
+    padding: ${SPACE} ${SPACE_MD};
+
+    .icon {
+      margin-right: ${SPACE_TIMES(1.5)};
+      color: ${p => p.theme.textColorDisabled};
+    }
   }
 `;

@@ -25,7 +25,7 @@ import {
 } from 'app/pages/MainPage/pages/VizPage/slice/types';
 import { transferChartConfig } from 'app/pages/MainPage/pages/VizPage/slice/utils';
 import { ChartConfig, SelectedItem } from 'app/types/ChartConfig';
-import { ChartDataRequestFilter } from 'app/types/ChartDataRequest';
+import { PendingChartDataRequestFilter } from 'app/types/ChartDataRequest';
 import { ChartDTO } from 'app/types/ChartDTO';
 import { mergeToChartConfig } from 'app/utils/ChartDtoHelper';
 import { FilterSqlOperator } from 'globalConstants';
@@ -46,7 +46,7 @@ export const initialState: SharePageState = {
   executeToken: '',
   executeTokenMap: {},
   sharePassword: undefined,
-  chartPreview: {},
+  chartPreview: { isLoadingData: false },
   headlessBrowserRenderSign: false,
   pageWidthHeight: [0, 0],
   shareDownloadPolling: false,
@@ -106,11 +106,11 @@ export const slice = createSlice({
         chartConfigDTO?.chartGraphId,
       );
       let chartConfig = currentChart?.config as ChartConfig;
-      const jumpFilters: ChartDataRequestFilter[] = Object.entries(
+      const jumpFilters: PendingChartDataRequestFilter[] = Object.entries(
         Omit(filterSearchParams, ['type', 'isMatchByName']),
       ).map(entity => {
         return {
-          column: entity[0]?.split('.'),
+          column: entity[0],
           sqlOperator: FilterSqlOperator.In,
           values: entity[1]?.map(v => ({
             value: v,
@@ -195,6 +195,9 @@ export const slice = createSlice({
     changeSelectedItems(state, { payload }: PayloadAction<SelectedItem[]>) {
       state.selectedItems = payload;
     },
+    savePageTitle: (state, action: PayloadAction<{ title: string }>) => {
+      state.title = action.payload.title;
+    },
   },
   extraReducers: builder => {
     builder
@@ -207,20 +210,29 @@ export const slice = createSlice({
       .addCase(fetchShareVizInfo.rejected, state => {
         state.loginLoading = false;
       })
+      .addCase(fetchShareDataSetByPreviewChartAction.pending, state => {
+        if (state.chartPreview) {
+          state.chartPreview.isLoadingData = true;
+        }
+      })
+      .addCase(fetchShareDataSetByPreviewChartAction.rejected, state => {
+        if (state.chartPreview) {
+          state.chartPreview.isLoadingData = false;
+        }
+        state.headlessBrowserRenderSign = true;
+      })
       .addCase(
         fetchShareDataSetByPreviewChartAction.fulfilled,
         (state, { payload }) => {
           state.chartPreview = {
             ...state.chartPreview,
+            isLoadingData: false,
             dataset: payload as any,
           };
           state.selectedItems = [];
           state.headlessBrowserRenderSign = true;
         },
       )
-      .addCase(fetchShareDataSetByPreviewChartAction.rejected, state => {
-        state.headlessBrowserRenderSign = true;
-      })
       .addCase(getOauth2Clients.fulfilled, (state, action) => {
         state.oauth2Clients = action.payload.map(x => ({
           name: Object.keys(x)[0],

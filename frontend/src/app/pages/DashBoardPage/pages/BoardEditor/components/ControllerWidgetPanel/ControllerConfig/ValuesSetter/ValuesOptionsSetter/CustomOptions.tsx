@@ -17,11 +17,11 @@
  */
 import { Button, FormInstance, Space } from 'antd';
 import { DragSortEditTable } from 'app/components/DragSortEditTable';
+import useI18NPrefix from 'app/hooks/useI18NPrefix';
 import { RelationFilterValue } from 'app/types/ChartConfig';
 import React, { memo, useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components/macro';
 import { ControllerConfig } from '../../../types';
-import useI18NPrefix from 'app/hooks/useI18NPrefix';
 
 export interface CustomOptionsProps {
   form: FormInstance<{ config: ControllerConfig }> | undefined;
@@ -37,6 +37,7 @@ export const CustomOptions: React.FC<CustomOptionsProps> = memo(
         setRows(rows);
         const config = getControllerConfig();
         const valueOptions = [...rows.slice()];
+
         form?.setFieldsValue({
           config: {
             ...config,
@@ -56,7 +57,12 @@ export const CustomOptions: React.FC<CustomOptionsProps> = memo(
       (row: RelationFilterValue) => {
         const newRows = [...rows];
         const targetIndex = newRows.findIndex(r => r.index === row.index);
-        newRows.splice(targetIndex, 1, row);
+
+        if (row.childIndex !== undefined) {
+          newRows[targetIndex]?.children?.splice(row.childIndex, 1, row);
+        } else {
+          newRows.splice(targetIndex, 1, row);
+        }
         onChangeFilterOptions(newRows);
       },
       [onChangeFilterOptions, rows],
@@ -132,6 +138,7 @@ export const CustomOptions: React.FC<CustomOptionsProps> = memo(
       if (!col.editable) {
         return col;
       }
+
       return {
         ...col,
         onCell: (record: RelationFilterValue) => ({

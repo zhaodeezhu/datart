@@ -19,6 +19,7 @@
 import {
   AggregateFieldActionType,
   ChartDataSectionType,
+  ChartDataViewFieldCategory,
   DataViewFieldType,
   FilterConditionType,
   SortActionType,
@@ -56,8 +57,13 @@ import {
   RUNTIME_FILTER_KEY,
   TIME_FORMATTER,
 } from 'globalConstants';
-import isEqual from 'lodash/isEqual';
-import { isEmptyArray, IsKeyIn, UniqWith } from 'utils/object';
+import {
+  isEmptyArray,
+  isEmptyString,
+  isEqualObject,
+  IsKeyIn,
+  UniqWith,
+} from 'utils/object';
 import { DrillMode } from './ChartDrillOption';
 
 export class ChartDataRequestBuilder {
@@ -157,7 +163,8 @@ export class ChartDataRequestBuilder {
         column: this.buildColumnName(aggCol),
         sqlOperator: aggCol.aggregate!,
       })),
-      (a, b) => isEqual(a.column, b.column) && a.sqlOperator === b.sqlOperator,
+      (a, b) =>
+        isEqualObject(a.column, b.column) && a.sqlOperator === b.sqlOperator,
     );
   }
 
@@ -174,12 +181,7 @@ export class ChartDataRequestBuilder {
   private buildColumnName(col) {
     const row = findPathByNameInMeta(this.dataView.meta, col.colName);
     if (row) {
-      try {
-        return row?.path || [];
-      } catch (e) {
-        console.log('error buildColumnName row ' + col.colName);
-        return row?.path || [];
-      }
+      return row?.path || [];
     } else {
       return [col.colName];
     }
@@ -230,14 +232,12 @@ export class ChartDataRequestBuilder {
       },
       [],
     );
-
-    return Array.from(
-      new Set(
-        groupColumns.map(groupCol => ({
-          alias: this.buildAliasName(groupCol),
-          column: this.buildColumnName(groupCol),
-        })),
-      ),
+    const newGroupColumns = groupColumns.map(groupCol => ({
+      alias: this.buildAliasName(groupCol),
+      column: this.buildColumnName(groupCol),
+    }));
+    return UniqWith(newGroupColumns, (a, b) =>
+      isEqualObject(a.column, b.column),
     );
   }
 
@@ -258,8 +258,24 @@ export class ChartDataRequestBuilder {
           return true;
         } else if (Array.isArray(col.filter?.condition?.value)) {
           return Boolean(col.filter?.condition?.value?.length);
+        } else if (
+          [
+            FilterSqlOperator.Contain,
+            FilterSqlOperator.NotContain,
+            FilterSqlOperator.Equal,
+            FilterSqlOperator.NotEqual,
+            FilterSqlOperator.In,
+            FilterSqlOperator.NotIn,
+            FilterSqlOperator.PrefixContain,
+            FilterSqlOperator.NotPrefixContain,
+            FilterSqlOperator.SuffixContain,
+            FilterSqlOperator.NotSuffixContain,
+          ].includes(col.filter?.condition?.operator as FilterSqlOperator)
+        ) {
+          return !isEmptyString(col.filter?.condition?.value);
+        } else {
+          return true;
         }
-        return true;
       })
       .map(col => col);
 
@@ -269,7 +285,7 @@ export class ChartDataRequestBuilder {
   }
 
   private normalizeFilters = (fields: ChartDataSectionField[]) => {
-    const _timeConverter = (visualType, value) => {
+    const _timeConverter = (visualType, value, dateFormat = TIME_FORMATTER) => {
       if (visualType !== 'DATE') {
         return value;
       }
@@ -278,13 +294,14 @@ export class ChartDataRequestBuilder {
           value.unit,
           value.isStart,
         );
-        return formatTime(time, TIME_FORMATTER);
+        return formatTime(time, dateFormat);
       }
-      return formatTime(value, TIME_FORMATTER);
+      return formatTime(value, dateFormat);
     };
 
     const _transformFieldValues = (field: ChartDataSectionField) => {
       const conditionValue = field.filter?.condition?.value;
+      const dateFormat = field.dateFormat;
       if (!conditionValue) {
         return null;
       }
@@ -302,7 +319,11 @@ export class ChartDataRequestBuilder {
               };
             } else {
               return {
-                value: _timeConverter(field.filter?.condition?.visualType, v),
+                value: _timeConverter(
+                  field.filter?.condition?.visualType,
+                  v,
+                  dateFormat,
+                ),
                 valueType: field.type,
               };
             }
@@ -312,7 +333,10 @@ export class ChartDataRequestBuilder {
       if (
         field?.filter?.condition?.type === FilterConditionType.RecommendTime
       ) {
-        const timeRange = recommendTimeRangeConverter(conditionValue);
+        const timeRange = recommendTimeRangeConverter(
+          conditionValue,
+          dateFormat,
+        );
         return timeRange.map(t => ({
           value: t,
           valueType: field.type,
@@ -323,6 +347,7 @@ export class ChartDataRequestBuilder {
           value: _timeConverter(
             field.filter?.condition?.visualType,
             conditionValue,
+            dateFormat,
           ),
           valueType: field.type,
         },
@@ -359,7 +384,7 @@ export class ChartDataRequestBuilder {
       .map(f => {
         return {
           aggOperator: null,
-          column: this.buildColumnName(f.condition?.name!),
+          column: this.buildColumnName({ colName: f.condition?.name! }),
           sqlOperator: f.condition?.operator! as FilterSqlOperator,
           values: [
             { value: f.condition?.value as string, valueType: 'STRING' },
@@ -458,9 +483,15 @@ export class ChartDataRequestBuilder {
     const computedFields = getRuntimeDateLevelFields(
       this.dataView.computedFields,
     );
+    const fieldsNameList = (this.chartDataConfigs || [])
+      .flatMap(config => getRuntimeDateLevelFields(config.rows) || [])
+      .flatMap(row => row?.colName || []);
+    const currentUsedComputedFields = computedFields?.filter(v =>
+      fieldsNameList.includes(v.name),
+    );
 
-    return (computedFields || []).map(f => ({
-      alias: f.id!,
+    return (currentUsedComputedFields || []).map(f => ({
+      alias: f.name!,
       snippet: f.expression,
     }));
   }
@@ -540,6 +571,9 @@ export class ChartDataRequestBuilder {
     );
 
     return selectColumns
+      ?.filter(
+        c => c.category !== ChartDataViewFieldCategory.AggregateComputedField,
+      )
       ?.reduce<ChartDataSectionField[]>((acc, cur) => {
         if (acc.find(x => x?.colName === cur.colName)) {
           return acc;
@@ -568,8 +602,10 @@ export class ChartDataRequestBuilder {
 
   private removeInvalidFilter(filters: ChartDataRequestFilter[]) {
     const dataViewFieldsNames = (
-      (getAllColumnInMeta(this.dataView?.meta) as ChartDataViewMeta[]) || []
-    ).map(c => c?.name);
+      getAllColumnInMeta(this.dataView?.meta) as ChartDataViewMeta[]
+    )
+      .concat(this.dataView?.computedFields || [])
+      .map(c => c?.name);
 
     return (filters || []).filter(f => {
       return dataViewFieldsNames.includes(f.column.join('.'));
@@ -615,7 +651,7 @@ export class ChartDataRequestBuilder {
   public getColNameStringFilter(): PendingChartDataRequestFilter[] {
     return this.buildFilters().map(v => {
       const row = getAllColumnInMeta(this.dataView.meta)?.find(val =>
-        isEqual(val.path, v.column),
+        isEqualObject(val.path, v.column),
       );
       return {
         ...v,

@@ -17,15 +17,15 @@
  */
 
 import { ChartDataViewFieldCategory, DataViewFieldType } from 'app/constants';
-import { prefixI18N } from 'app/hooks/useI18NPrefix';
+import { FieldTemplate } from 'app/pages/ChartWorkbenchPage/components/ChartOperationPanel/components/ChartDataViewPanel/components/utils';
 import { ColumnRole } from 'app/pages/MainPage/pages/ViewPage/slice/types';
 import { ChartDataSectionField } from 'app/types/ChartConfig';
 import { ChartDataViewMeta } from 'app/types/ChartDataViewMeta';
 import { updateBy } from 'app/utils/mutation';
+import { DATE_LEVEL_DELIMITER } from 'globalConstants';
+import i18n from 'i18next';
 import { CloneValueDeep } from 'utils/object';
 import { DATE_LEVELS } from '../../slice/constant';
-
-const Prefix = 'viz.workbench.dataview.';
 
 export const getAllFieldsOfEachType = (args: {
   sortType;
@@ -34,14 +34,9 @@ export const getAllFieldsOfEachType = (args: {
 }) => {
   const { sortType, dataView, availableSourceFunctions } = args;
   const computedFields =
-    dataView?.computedFields
-      ?.filter(
-        v => v.category !== ChartDataViewFieldCategory.DateLevelComputedField,
-      )
-      .map(v => {
-        return { ...v, name: v.id };
-      }) || [];
-
+    dataView?.computedFields?.filter(
+      v => v.category !== ChartDataViewFieldCategory.DateLevelComputedField,
+    ) || [];
   const allFields = dataView?.meta || [];
 
   let hierarchyFields = allFields.filter(f => f.role === ColumnRole.Hierarchy);
@@ -110,13 +105,12 @@ export const buildDateLevelFields = (args: {
           availableSourceFunctions.includes(item.expression)
         ) {
           return {
-            id: `${v.name}（${item.expression}）`,
-            name: v.name,
+            name: v.name + DATE_LEVEL_DELIMITER + item.expression,
+            field: v.name,
             type: item.type,
             category: item.category,
-            expression: item.expression,
-            path: v.path,
-            displayName: v.path[v.path.length - 1],
+            expression: `${item.expression}(${FieldTemplate(v.path)})`,
+            displayName: v.path[v.path?.length - 1] + `（${item.name}）`,
           };
         }
         return null;
@@ -143,6 +137,7 @@ export const fieldsSortByType = (fields, sortType) => {
     }
   });
 };
+
 export const getCanReplaceViewFields = (
   viewFields: ChartDataViewMeta[],
   target: ChartDataSectionField,
@@ -210,12 +205,9 @@ export const findSameFieldInView = (
       bool = findSameFieldInView(item.children, field);
     }
     if (bool) return true;
-    const itemName =
-      item.category === 'dateLevelComputedField'
-        ? `${item.name}（${prefixI18N(Prefix + item.expression)}）`
-        : item.name;
+
     if (
-      itemName === field.colName &&
+      item.name === field.colName &&
       item.category === field.category &&
       item.type === field.type
     ) {
@@ -226,4 +218,17 @@ export const findSameFieldInView = (
   if (item) return true;
 
   return false;
+};
+
+export const handleDateLevelsName = (col: {
+  name: string;
+  category: string;
+}): string => {
+  if (col.category === ChartDataViewFieldCategory.DateLevelComputedField) {
+    const prefix = 'viz.workbench.dataview.';
+    const colList = col.name.split(DATE_LEVEL_DELIMITER);
+    return `${colList[0]}（${i18n.t(prefix + colList[1])}）`;
+  } else {
+    return col.name;
+  }
 };

@@ -35,6 +35,7 @@ import { getWidgetMap } from 'app/pages/DashBoardPage/utils/widget';
 import { ChartConfig } from 'app/types/ChartConfig';
 import { ChartDetailConfigDTO } from 'app/types/ChartConfigDTO';
 import { ChartDTO } from 'app/types/ChartDTO';
+import { convertToChartDto } from 'app/utils/ChartDtoHelper';
 
 // import 'core-js/stable/map';
 // need polyfill [Object.values,Array.prototype.find,new Map]
@@ -50,12 +51,16 @@ const getBoardQueryData = (dataStr: string) => {
   const dashboard = getDashBoardByResBoard(data);
   const { datacharts, views: serverViews, widgets: serverWidgets } = data;
 
-  const dataCharts: DataChart[] = getDataChartsByServer(datacharts);
+  const dataCharts: DataChart[] = getDataChartsByServer(
+    datacharts,
+    serverViews,
+  );
   const migratedWidgets = migrateWidgets(serverWidgets, dashboard.config.type);
   const { widgetMap, wrappedDataCharts } = getWidgetMap(
     migratedWidgets, // TODO
     dataCharts,
     dashboard.config.type,
+    serverViews,
   );
 
   const allDataCharts: DataChart[] = dataCharts.concat(wrappedDataCharts);
@@ -82,14 +87,15 @@ const getBoardQueryData = (dataStr: string) => {
 const getChartQueryData = (dataStr: string) => {
   // see  handleCreateDownloadDataTask
   const data: ChartDTO = JSON.parse(dataStr || '{}');
-  const dataConfig: ChartDetailConfigDTO = JSON.parse(
-    (data.config as any) || '{}',
-  );
+
+  const chartData = convertToChartDto(data);
+  const dataConfig: ChartDetailConfigDTO = chartData.config;
+
   const chartConfig: ChartConfig = dataConfig.chartConfig as ChartConfig;
   const builder = new ChartDataRequestBuilder(
     {
-      ...data.view,
-      computedFields: dataConfig.computedFields || [],
+      ...chartData.view,
+      computedFields: chartData.config.computedFields,
     },
     chartConfig?.datas,
     chartConfig?.settings,

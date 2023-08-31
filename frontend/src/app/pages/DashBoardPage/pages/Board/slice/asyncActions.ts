@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 import { DownloadFileType } from 'app/constants';
+import migrateWidgetChartConfig from 'app/migration/BoardConfig/migrateWidgetChartConfig';
 import { migrateWidgets } from 'app/migration/BoardConfig/migrateWidgets';
 import { FilterSearchParamsWithMatch } from 'app/pages/MainPage/pages/VizPage/slice/types';
 import { mainActions } from 'app/pages/MainPage/slice';
@@ -60,15 +61,18 @@ export const handleServerBoardAction =
     const dashboard = getDashBoardByResBoard(data);
     const { datacharts, views: serverViews, widgets: serverWidgets } = data;
 
-    const dataCharts: DataChart[] = getDataChartsByServer(datacharts);
-    const migratedWidgets = migrateWidgets(
-      serverWidgets,
-      dashboard.config.type,
+    const dataCharts: DataChart[] = getDataChartsByServer(
+      datacharts,
+      serverViews,
     );
+    let migratedWidgets = migrateWidgets(serverWidgets, dashboard.config.type);
+    migratedWidgets = migrateWidgetChartConfig(migratedWidgets);
+
     const { widgetMap, wrappedDataCharts, controllerWidgets } = getWidgetMap(
       migratedWidgets,
       dataCharts,
       dashboard.config.type,
+      serverViews,
       filterSearchMap,
     );
     const widgetIds = Object.values(widgetMap).map(w => w.id);

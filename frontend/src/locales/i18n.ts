@@ -29,6 +29,10 @@ export const changeLang = lang => {
   window.location && window.location.reload();
 };
 
+export const getLang = () => {
+  return localStorage.getItem(StorageKeys.Locale);
+};
+
 const initialLocale = getInitialLocale();
 requestInstance.defaults.headers['Accept-Language'] =
   initialLocale === 'zh' ? 'zh-CN' : 'en-US'; // FIXME locale
@@ -58,5 +62,3 @@ export const antdLocales = {
   en: antd_en_US,
   zh: antd_zh_CN,
 };
-
-

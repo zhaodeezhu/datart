@@ -16,7 +16,6 @@
  * limitations under the License.
  */
 
-import { BoardContext } from 'app/pages/DashBoardPage/components/BoardProvider/BoardProvider';
 import { WidgetMapper } from 'app/pages/DashBoardPage/components/WidgetMapper/WidgetMapper';
 import { WidgetContext } from 'app/pages/DashBoardPage/components/WidgetProvider/WidgetProvider';
 import { WIDGET_DRAG_HANDLE } from 'app/pages/DashBoardPage/constants';
@@ -34,23 +33,24 @@ import { DraggableCore, DraggableEventHandler } from 'react-draggable';
 import { useSelector } from 'react-redux';
 import { Resizable, ResizeCallbackData } from 'react-resizable';
 import styled from 'styled-components/macro';
-import { WHITE } from 'styles/StyleConstants';
+import { LEVEL_DASHBOARD_EDIT_OVERLAY, WHITE } from 'styles/StyleConstants';
 import { WidgetActionContext } from '../../../components/ActionProvider/WidgetActionProvider';
 import { BoardScaleContext } from '../../../components/FreeBoardBackground';
 import { WidgetInfoContext } from '../../../components/WidgetProvider/WidgetInfoProvider';
 import { ORIGINAL_TYPE_MAP } from '../../../constants';
 import { widgetMove, widgetMoveEnd } from '../slice/events';
-import { selectSelectedIds } from '../slice/selectors';
+import { selectEditingWidgetIds, selectSelectedIds } from '../slice/selectors';
 export enum DragTriggerTypes {
   MouseMove = 'mousemove',
   KeyDown = 'keydown',
 }
+
 export const WidgetOfFreeEdit: React.FC<{}> = () => {
   const selectedIds = useSelector(selectSelectedIds);
   const widget = useContext(WidgetContext);
-  const { boardType } = useContext(BoardContext);
   const { editing: widgetEditing } = useContext(WidgetInfoContext);
   const { onEditFreeWidgetRect } = useContext(WidgetActionContext);
+  const editingWidgetIds = useSelector(selectEditingWidgetIds);
   const scale = useContext(BoardScaleContext);
   const hideHandle = useMemo(() => {
     return (
@@ -80,13 +80,16 @@ export const WidgetOfFreeEdit: React.FC<{}> = () => {
     [widget.id],
   );
   const moveEnd = useCallback(() => {
+    if (!selectedIds.includes(widget.id)) {
+      return;
+    }
     const nextRect = {
       ...widget.config.rect,
       x: Number(curXY[0].toFixed(1)),
       y: Number(curXY[1].toFixed(1)),
     };
     onEditFreeWidgetRect(nextRect, widget.id, false);
-  }, [curXY, onEditFreeWidgetRect, widget.config.rect, widget.id]);
+  }, [curXY, onEditFreeWidgetRect, selectedIds, widget.config.rect, widget.id]);
   useEffect(() => {
     widgetMove.on(move);
     widgetMoveEnd.on(moveEnd);
@@ -157,6 +160,11 @@ export const WidgetOfFreeEdit: React.FC<{}> = () => {
   const ssp = e => {
     e.stopPropagation();
   };
+
+  if (editingWidgetIds?.includes(widget?.id)) {
+    style['zIndex'] = LEVEL_DASHBOARD_EDIT_OVERLAY + 1;
+  }
+
   return (
     <DraggableCore
       allowAnyClick

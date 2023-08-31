@@ -17,7 +17,7 @@
  */
 
 import { TreeDataNode, TreeNodeProps } from 'antd';
-import { DataViewFieldType } from 'app/constants';
+import { DataViewFieldType, DateFormat } from 'app/constants';
 import { ChartDataViewMeta } from 'app/types/ChartDataViewMeta';
 import { ReactElement } from 'react';
 import { View } from '../../../../../types/View';
@@ -110,6 +110,7 @@ export interface QueryResult {
   pageInfo: PageInfo;
   script?: string;
   warnings?: string[] | null;
+  reqColumns?: { column: []; alias: string }[];
 }
 export interface PageInfo {
   pageNo: number;
@@ -131,21 +132,34 @@ export enum ColumnRole {
 export interface Column extends Schema {
   category?: ColumnCategories;
   index?: number;
-
+  dateFormat?: DateFormat;
   role?: ColumnRole;
   children?: Column[];
   path?: string[];
   displayName?: string;
 }
 
+export interface ColumnsProps {
+  category?: ColumnCategories;
+  index?: number;
+  name: string[];
+  primaryKey?: boolean;
+  type: DataViewFieldType;
+  role?: ColumnRole;
+}
+
 export interface Model {
   [key: string]: Column;
+}
+
+export interface ColumnsModel {
+  [key: string]: ColumnsProps;
 }
 
 export type HierarchyModel = {
   version?: string;
   hierarchy?: Model;
-  columns?: Model;
+  columns?: ColumnsModel;
   path?: string[];
   computedFields?: ChartDataViewMeta[];
 };

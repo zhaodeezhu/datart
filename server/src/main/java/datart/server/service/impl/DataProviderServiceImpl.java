@@ -20,7 +20,9 @@ package datart.server.service.impl;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONException;
 import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson.parser.Feature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Sets;
@@ -36,7 +38,6 @@ import datart.core.entity.RelSubjectColumns;
 import datart.core.entity.Source;
 import datart.core.entity.View;
 import datart.core.mappers.ext.RelSubjectColumnsMapperExt;
-import datart.core.data.provider.ScriptType;
 import datart.security.util.AESUtil;
 import datart.server.base.dto.VariableValue;
 import datart.server.base.params.TestExecuteParam;
@@ -139,14 +140,14 @@ public class DataProviderServiceImpl extends BaseService implements DataProvider
         return dataProviderManager.readTableColumns(parseDataProviderConfig(source), database, table);
     }
 
-
+    @Override
     public DataProviderSource parseDataProviderConfig(Source source) {
         DataProviderSource providerSource = new DataProviderSource();
         try {
             providerSource.setSourceId(source.getId());
             providerSource.setType(source.getType());
             providerSource.setName(source.getName());
-            Map<String, Object> properties = new HashMap<>();
+            Map<String, Object> properties = new HashMap<>(16);
             if (StringUtils.isNotBlank(source.getConfig())) {
                 properties = objectMapper.readValue(source.getConfig(), HashMap.class);
             }
@@ -352,7 +353,7 @@ public class DataProviderServiceImpl extends BaseService implements DataProvider
         variables.add(new ScriptVariable(VARIABLE_NAME,
                 VariableTypeEnum.PERMISSION,
                 ValueType.STRING,
-                Sets.newHashSet(getCurrentUser().getUsername()),
+                getCurrentUser().getName() == null ? Collections.emptySet() : Sets.newHashSet(getCurrentUser().getName()),
                 false));
         variables.add(new ScriptVariable(VARIABLE_EMAIL,
                 VariableTypeEnum.PERMISSION,
@@ -428,14 +429,36 @@ public class DataProviderServiceImpl extends BaseService implements DataProvider
      * @param model view.model
      */
     private Map<String, Column> parseSchema(String model) {
-        HashMap<String, Column> schema = new HashMap<>();
+        Map<String, Column> schema = new LinkedHashMap<>();
         if (StringUtils.isBlank(model)) {
             return schema;
         }
 
-        JSONObject jsonObject = JSON.parseObject(model);
+        JSONObject jsonObject = JSON.parseObject(model, Feature.OrderedField);
         try {
-            if (jsonObject.containsKey("hierarchy")) {
+            if (jsonObject.containsKey("columns")) {
+                jsonObject = jsonObject.getJSONObject("columns");
+                for (String key : jsonObject.keySet()) {
+                    JSONObject item = jsonObject.getJSONObject(key);
+                    String[] names;
+                    if (item.get("name") instanceof JSONArray) {
+                        if (item.getJSONArray("name").size() == 1) {
+                            String nameString = item.getJSONArray("name").getString(0);
+                            try {
+                                names = JSONObject.parseArray(nameString).toArray(new String[0]);
+                            } catch (JSONException e) {
+                                names = new String[]{nameString};
+                            }
+                        } else {
+                            names = item.getJSONArray("name").toArray(new String[0]);
+                        }
+                    } else {
+                        names = new String[]{Optional.ofNullable(item.getString("name")).orElse(key)};
+                    }
+                    Column column = Column.of(ValueType.valueOf(item.getString("type")), names);
+                    schema.put(column.columnKey(), column);
+                }
+            } else if (jsonObject.containsKey("hierarchy")) {
                 jsonObject = jsonObject.getJSONObject("hierarchy");
                 for (String key : jsonObject.keySet()) {
                     JSONObject item = jsonObject.getJSONObject(key);
@@ -448,7 +471,7 @@ public class DataProviderServiceImpl extends BaseService implements DataProvider
                             }
                         }
                     } else {
-                        schema.put(key, Column.of(ValueType.valueOf(item.getString("type")), key));
+                        schema.put(key, Column.of(ValueType.valueOf(item.getString("type")), key.split("\\.")));
                     }
                 }
             } else {

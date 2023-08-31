@@ -20,10 +20,10 @@ import {
   ChartDataViewFieldCategory,
   ChartDataViewSubType,
   DataViewFieldType,
+  DateFormat,
 } from 'app/constants';
 
 export type ChartDataViewMeta = {
-  id: string;
   name: string;
   path?: string[];
   isActive?: boolean;
@@ -36,4 +36,5 @@ export type ChartDataViewMeta = {
   role?: string;
   children?: ChartDataViewMeta[];
   isViewComputedFields?: boolean;
+  dateFormat?: DateFormat;
 };

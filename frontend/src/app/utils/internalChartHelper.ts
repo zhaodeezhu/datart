@@ -34,6 +34,7 @@ import {
   DataViewFieldType,
 } from 'app/constants';
 import { ChartDrillOption } from 'app/models/ChartDrillOption';
+import { handleDateLevelsName } from 'app/pages/ChartWorkbenchPage/components/ChartOperationPanel/utils';
 import { VariableTypes } from 'app/pages/MainPage/pages/VariablePage/constants';
 import { Variable } from 'app/pages/MainPage/pages/VariablePage/slice/types';
 import {
@@ -52,6 +53,7 @@ import { ChartDataViewMeta } from 'app/types/ChartDataViewMeta';
 import { IChartDrillOption } from 'app/types/ChartDrillOption';
 import { FilterSqlOperator } from 'globalConstants';
 import {
+  CloneValueDeep,
   cond,
   curry,
   isEmpty,
@@ -341,6 +343,9 @@ export function getColumnRenderOriginName(c?: ChartDataSectionField) {
   if (c.aggregate) {
     return `${c.aggregate}(${c.colName})`;
   }
+  if (c.category === ChartDataViewFieldCategory.DateLevelComputedField) {
+    return handleDateLevelsName({ ...c, name: c.colName });
+  }
   return c.colName;
 }
 
@@ -386,14 +391,12 @@ export function transformMeta(model?: string) {
     if (!isEmptyArray(column?.children)) {
       return column.children.map(c => ({
         ...c,
-        id: c.name,
         path: c.path,
         category: ChartDataViewFieldCategory.Field,
       }));
     }
     return {
       ...column,
-      id: colKey,
       path: column.path || colKey,
       category: ChartDataViewFieldCategory.Field,
     };
@@ -423,7 +426,6 @@ function getMeta(key, column) {
   }
   return {
     ...column,
-    id: key,
     subType: column?.category,
     category: isHierarchy
       ? ChartDataViewFieldCategory.Hierarchy
@@ -494,7 +496,36 @@ export function mergeChartStyleConfigs(
     if (!isUndefined(sEle?.['value'])) {
       tEle['value'] = getUpdatedChartStyleValue(tEle['value'], sEle?.['value']);
     }
-    if (!isEmptyArray(tEle?.rows)) {
+
+    if (!isUndefined(sEle?.['disabled'])) {
+      tEle['disabled'] = sEle?.['disabled'];
+    }
+
+    if (tEle?.template && !isEmptyArray(sEle?.rows)) {
+      const template = tEle.template;
+      tEle['rows'] = sEle?.rows?.map(row => {
+        const tRows = CloneValueDeep(template?.rows);
+        const newRow = {
+          ...template,
+          /**
+           * template overwrite principle:
+           * 1. child key allow change by row key, eg. key is field uuid.
+           * 2. child value allow change by row
+           * 3. child disabled status allow change by row
+           * 4. child action should be use template row action
+           */
+          key: row.key,
+          rows: mergeChartStyleConfigs(tRows, row?.rows, options),
+        };
+        if (!isUndefined(row?.value)) {
+          newRow.value = getUpdatedChartStyleValue(row.value, newRow?.value);
+        }
+        if (!isUndefined(row?.disabled)) {
+          newRow.disabled = row.disabled;
+        }
+        return newRow;
+      });
+    } else if (!isEmptyArray(tEle?.rows)) {
       tEle['rows'] = mergeChartStyleConfigs(tEle.rows, sEle?.rows, options);
     } else if (sEle && !isEmptyArray(sEle?.rows)) {
       // Note: we merge all rows data when target rows is empty
@@ -553,8 +584,8 @@ export function getRequiredAggregatedSections(dataConfigs?) {
   );
 }
 
-// TODO(Stephen): to be delete after use ChartDataSet Model in charts
-// 兼容 impala 聚合函数小写问题
+// @deprecate 兼容 impala 聚合函数小写问题
+// TODO(Stephen): should be remove and test in RC.1
 export const filterSqlOperatorName = (requestParams, widgetData) => {
   const sqlOperatorNameList = requestParams.aggregators.map(aggConfig =>
     aggConfig.sqlOperator?.toLocaleLowerCase(),
@@ -675,11 +706,11 @@ export const transformToViewConfig = (
 
 export const buildDragItem = (item, children: any[] = []) => {
   return {
-    id: item?.name,
     colName: item?.name,
     type: item?.type,
     subType: item?.subType,
     category: item?.category,
+    dateFormat: item?.dateFormat,
     children: children.map(c => buildDragItem(c)),
   };
 };

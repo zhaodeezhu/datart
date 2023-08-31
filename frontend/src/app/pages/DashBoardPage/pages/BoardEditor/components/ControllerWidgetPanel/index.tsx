@@ -72,7 +72,7 @@ const ControllerWidgetPanel: React.FC<WidgetControllerPanelParams> = memo(
     const t = useI18NPrefix('viz.common.enum.controllerFacadeTypes');
     const tGMT = useI18NPrefix(`global.modal.title`);
 
-    const { boardId, boardType, queryVariables } = useContext(BoardContext);
+    const { boardType, queryVariables } = useContext(BoardContext);
 
     const hasQueryControl = false;
     const { onRefreshWidgetsByController } = useContext(WidgetActionContext);
@@ -220,6 +220,7 @@ const ControllerWidgetPanel: React.FC<WidgetControllerPanelParams> = memo(
             config: postControlConfig(config, controllerType!),
           };
           const viewIds = getViewIdsInControlConfig(config);
+
           let newWidget = widgetManagerInstance.toolkit(controllerType).create({
             boardType,
             name: name,
@@ -300,6 +301,7 @@ const ControllerWidgetPanel: React.FC<WidgetControllerPanelParams> = memo(
       setRelatedWidgets(relatedWidgets);
       setFormRelatedViews(setViewsRelatedView(relatedWidgets));
     };
+
     return (
       <Modal
         title={`${tGMT(type)}${t(controllerType || '')}`}
@@ -328,6 +330,8 @@ const ControllerWidgetPanel: React.FC<WidgetControllerPanelParams> = memo(
                   boardType={boardType}
                   viewMap={viewMap}
                   form={form}
+                  boardVizs={allWidgets}
+                  wid={widgetId}
                 />
               )}
             </div>

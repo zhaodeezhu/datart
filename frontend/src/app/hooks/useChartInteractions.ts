@@ -25,6 +25,7 @@ import {
   DrillThroughSetting,
   ViewDetailSetting,
 } from 'app/components/FormGenerator/Customize/Interaction/types';
+import { ChartInteractionEvent } from 'app/constants';
 import useDrillThrough from 'app/hooks/useDrillThrough';
 import { ChartDataRequestBuilder } from 'app/models/ChartDataRequestBuilder';
 import { getStyles, getValue } from 'app/utils/chartHelper';
@@ -43,16 +44,17 @@ import { urlSearchTransfer } from 'utils/urlSearchTransfer';
 
 const useChartInteractions = (props: {
   openViewDetailPanel?: Function;
-  openJumpDialogModal?: Function;
+  openJumpVizDialogModal?: Function;
+  openJumpUrlDialogModal?: Function;
 }) => {
-  const [
+  const {
     openNewTab,
     openBrowserTab,
     getDialogContent,
     redirectByUrl,
     openNewByUrl,
     getDialogContentByUrl,
-  ] = useDrillThrough();
+  } = useDrillThrough();
 
   const getDrillThroughSetting = (
     chartInteractions,
@@ -151,6 +153,7 @@ const useChartInteractions = (props: {
       computedFields,
       aggregation,
       chartConfig,
+      isJumpUrlOnly,
     }) => {
       if (drillThroughSetting) {
         const sourceChartFilters = new ChartDataRequestBuilder(
@@ -175,6 +178,7 @@ const useChartInteractions = (props: {
         const hasNoSelectedItems = isEmptyArray(
           clickEventParams?.selectedItems,
         );
+
         if (hasNoSelectedItems) {
           return;
         }
@@ -182,6 +186,11 @@ const useChartInteractions = (props: {
         (drillThroughSetting?.rules || [])
           .filter(rule => rule.event === targetEvent)
           .filter(rule => isEmpty(ruleId) || rule.id === ruleId)
+          .filter(
+            rule =>
+              !isJumpUrlOnly ||
+              rule?.category === InteractionCategory.JumpToUrl,
+          )
           .forEach(rule => {
             const clickFilters = buildClickEventBaseFilters(
               clickEventParams?.selectedItems?.map(item => item?.data?.rowData),
@@ -214,9 +223,10 @@ const useChartInteractions = (props: {
                 const modalContent = getDialogContent(
                   orgId,
                   relId,
+                  'DATACHART',
                   urlFiltersStr,
                 );
-                props?.openJumpDialogModal?.(modalContent as any);
+                props?.openJumpVizDialogModal?.(modalContent as any);
               }
             } else if (rule.category === InteractionCategory.JumpToDashboard) {
               const variableFilters = variableToFilter(
@@ -241,9 +251,10 @@ const useChartInteractions = (props: {
                 const modalContent = getDialogContent(
                   orgId,
                   relId,
+                  'DASHBOARD',
                   urlFiltersStr,
                 );
-                props?.openJumpDialogModal?.(modalContent as any);
+                props?.openJumpVizDialogModal?.(modalContent as any);
               }
             } else if (rule.category === InteractionCategory.JumpToUrl) {
               const variableFilters = variableToFilter(
@@ -267,7 +278,7 @@ const useChartInteractions = (props: {
               }
               if (rule?.action === InteractionAction.Dialog) {
                 const modalContent = getDialogContentByUrl(url, urlFiltersStr);
-                props?.openJumpDialogModal?.(modalContent as any);
+                props?.openJumpUrlDialogModal?.(modalContent as any);
               }
             }
           });
@@ -339,9 +350,8 @@ const useChartInteractions = (props: {
           rule,
         );
         const variables = getVariablesByInteractionRule(queryVariables, rule);
-        const isUnSelectedAll = !Boolean(
-          clickEventParams?.selectedItems?.length,
-        );
+        const isUnSelectedAll =
+          clickEventParams?.interactionType === ChartInteractionEvent.UnSelect;
         return {
           rule,
           isUnSelectedAll,
@@ -362,6 +372,7 @@ const useChartInteractions = (props: {
       viewDetailSetting,
       chartConfig,
       view,
+      authToken,
     }) => {
       if (viewDetailSetting?.event === targetEvent) {
         const clickFilters = buildClickEventBaseFilters(
@@ -382,6 +393,7 @@ const useChartInteractions = (props: {
           drillOption: drillOption,
           viewDetailSetting: viewDetailSetting,
           clickFilters: clickFilters,
+          authToken,
         });
       }
     },

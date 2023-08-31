@@ -126,6 +126,7 @@ export const InteractionI18N = {
       title: '跳转设置',
       rule: {
         title: '规则设置',
+        tip: '分享页仅支持跳转到URL一种方式',
         addRule: '+ 点击新建',
         inputUrl: '请输入URL',
         header: {
@@ -210,6 +211,7 @@ export const InteractionI18N = {
       title: 'Drill Through',
       rule: {
         title: 'Rule',
+        tip: 'Drill through only support jump to url',
         addRule: '+ Add New',
         inputUrl: 'Please input url',
         header: {
@@ -324,25 +326,25 @@ export const initPaddingTpl = () => {
       {
         label: 'padding.top',
         key: 'top',
-        value: '8',
+        value: 8,
         comType: 'inputNumber',
       },
       {
         label: 'padding.bottom',
         key: 'bottom',
-        value: '8',
+        value: 8,
         comType: 'inputNumber',
       },
       {
         label: 'padding.left',
         key: 'left',
-        value: '8',
+        value: 8,
         comType: 'inputNumber',
       },
       {
         label: 'padding.right',
         key: 'right',
-        value: '8',
+        value: 8,
         comType: 'inputNumber',
       },
     ],
@@ -381,7 +383,7 @@ export const initLoopFetchTpl = () => {
       {
         label: 'loopFetch.interval',
         key: 'interval',
-        value: '60', //60s
+        value: 60, //60s
         comType: 'inputNumber',
       },
     ],
@@ -443,9 +445,9 @@ export const initBorderTpl = () => {
         key: 'border',
         value: {
           color: 'transparent', // TODO 根据当前主题色配置
-          width: '0',
+          width: 0,
           style: 'solid',
-          radius: '0',
+          radius: 0,
         },
         comType: 'widgetBorder',
       },
@@ -454,7 +456,7 @@ export const initBorderTpl = () => {
   return borderTpl;
 };
 
-// TODO(Stephen): set width/height same as free widget?
+// TODO(Stephen): to be check if width/height setting same as free widget?
 export const initAutoWidgetRect = (): RectConfig => ({
   x: 0,
   y: 0,

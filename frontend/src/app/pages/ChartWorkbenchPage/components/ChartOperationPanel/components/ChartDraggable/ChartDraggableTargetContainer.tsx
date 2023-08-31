@@ -24,7 +24,6 @@ import {
 } from 'app/constants';
 import ChartDrillContext from 'app/contexts/ChartDrillContext';
 import useFieldActionModal from 'app/hooks/useFieldActionModal';
-import { FieldTemplate } from 'app/pages/ChartWorkbenchPage/components/ChartOperationPanel/components/ChartDataViewPanel/components/utils';
 import ChartAggregationContext from 'app/pages/ChartWorkbenchPage/contexts/ChartAggregationContext';
 import ChartDatasetContext from 'app/pages/ChartWorkbenchPage/contexts/ChartDatasetContext';
 import VizDataViewContext from 'app/pages/ChartWorkbenchPage/contexts/ChartDataViewContext';
@@ -103,17 +102,7 @@ export const ChartDraggableTargetContainer: FC<ChartDataConfigSectionProps> =
                   ...val,
                   aggregate: getDefaultAggregate(val, currentConfig),
                 };
-                if (
-                  val.category ===
-                  ChartDataViewFieldCategory.DateLevelComputedField
-                ) {
-                  config.colName = `${val.colName}（${t(val.expression)}）`;
-                  config.expression = `${val.expression}(${FieldTemplate(
-                    val.path,
-                  )})`;
-                  config.field = val.colName;
-                  delete config.path;
-                }
+
                 return config;
               }),
             );
@@ -172,6 +161,7 @@ export const ChartDraggableTargetContainer: FC<ChartDataConfigSectionProps> =
         },
         canDrop: (item: ChartDataSectionField, monitor) => {
           let items = Array.isArray(item) ? item : [item];
+
           if (
             [CHART_DRAG_ELEMENT_TYPE.DATASET_COLUMN_GROUP].includes(
               monitor.getItemType() as any,
@@ -186,12 +176,33 @@ export const ChartDraggableTargetContainer: FC<ChartDataConfigSectionProps> =
           }
 
           if (
+            currentConfig?.disableAggregateComputedField &&
+            item.category === 'aggregateComputedField'
+          ) {
+            return false;
+          }
+
+          if (currentConfig.allowSameField && !aggregation) {
+            return true;
+          }
+
+          if (
             typeof currentConfig.actions === 'object' &&
             !items.every(val => val.type in (currentConfig.actions || {}))
           ) {
             //zh: 判断现在拖动的数据项是否可以拖动到当前容器中 en: Determine whether the currently dragged data item can be dragged into the current container
             return false;
           }
+
+          const currentSectionDimensionRowNames = currentConfig.rows
+            ?.filter(
+              r =>
+                !items
+                  ?.map(i => i?.uid)
+                  ?.filter(Boolean)
+                  ?.includes(r?.uid),
+            )
+            ?.map(col => col.colName);
 
           if (
             items[0].category ===
@@ -206,24 +217,21 @@ export const ChartDraggableTargetContainer: FC<ChartDataConfigSectionProps> =
             ) {
               return false;
             }
-            const colNames = currentConfig.rows?.map(col => col.colName);
-            return colNames
-              ? colNames.every(v => !v?.includes(items[0].colName))
+            return currentSectionDimensionRowNames
+              ? currentSectionDimensionRowNames.every(
+                  v => !v?.includes(items[0].colName),
+                )
               : true;
           }
 
-          if (
-            monitor.getItemType() === CHART_DRAG_ELEMENT_TYPE.DATA_CONFIG_COLUMN
-          ) {
+          if (aggregation && items[0].type === DataViewFieldType.NUMERIC) {
             return true;
           }
 
-          if (currentConfig.allowSameField) {
-            return true;
-          }
-
-          const exists = currentConfig.rows?.map(col => col.colName);
-          return items.every(i => !exists?.includes(i.colName));
+          const isNotExist = items.every(
+            i => !currentSectionDimensionRowNames?.includes(i.colName),
+          );
+          return isNotExist;
         },
         collect: (monitor: DropTargetMonitor) => ({
           isOver: monitor.isOver(),
@@ -244,6 +252,9 @@ export const ChartDraggableTargetContainer: FC<ChartDataConfigSectionProps> =
     };
 
     const onDraggableItemMove = (dragIndex: number, hoverIndex: number) => {
+      if (!canDrop) {
+        return;
+      }
       const draggedItem = currentConfig.rows?.[dragIndex];
       if (draggedItem) {
         const newCurrentConfig = updateBy(currentConfig, draft => {
@@ -252,21 +263,6 @@ export const ChartDraggableTargetContainer: FC<ChartDataConfigSectionProps> =
           columns.splice(hoverIndex, 0, draggedItem);
         });
         setCurrentConfig(newCurrentConfig);
-      } else {
-        // const placeholder = {
-        //   uid: CHARTCONFIG_FIELD_PLACEHOLDER_UID,
-        //   colName: 'Placeholder',
-        //   category: 'field',
-        //   type: 'STRING',
-        // } as any;
-        // const newCurrentConfig = updateBy(currentConfig, draft => {
-        //   const columns = draft.rows || [];
-        //   if (dragIndex) {
-        //     columns.splice(dragIndex, 1);
-        //   }
-        //   columns.splice(hoverIndex, 0, placeholder);
-        // });
-        // setCurrentConfig(newCurrentConfig);
       }
     };
 

@@ -17,7 +17,7 @@
  */
 
 import { Form, Input, message, Select } from 'antd';
-import { DataViewFieldType } from 'app/constants';
+import { DataViewFieldType, DateFormat } from 'app/constants';
 import useI18NPrefix from 'app/hooks/useI18NPrefix';
 import useStateModal, { StateModalSize } from 'app/hooks/useStateModal';
 import { APP_CURRENT_VERSION } from 'app/migration/constants';
@@ -33,7 +33,7 @@ import { SPACE_LG } from 'styles/StyleConstants';
 import { Nullable } from 'types';
 import { CloneValueDeep, isEmpty, isEmptyArray } from 'utils/object';
 import { modelListFormsTreeByTableName } from 'utils/utils';
-import { ViewViewModelStages } from '../../../constants';
+import { ColumnCategories, ViewViewModelStages } from '../../../constants';
 import { useViewSlice } from '../../../slice';
 import {
   selectCurrentEditingView,
@@ -132,7 +132,14 @@ const DataModelTree: FC = memo(() => {
       if (currentEditingView?.model?.columns) {
         setFields(
           Object.values(currentEditingView.model.columns).map(v => {
-            return { id: v.name, name: v.name, displayName: v.name };
+            const stringName = Array.isArray(v.name)
+              ? v.name.join('.')
+              : v.name;
+            return {
+              id: v.name,
+              name: stringName,
+              displayName: stringName,
+            };
           }),
         );
       }
@@ -160,15 +167,17 @@ const DataModelTree: FC = memo(() => {
     handleDataModelHierarchyChange(newHierarchy);
   };
 
-  const handleNodeTypeChange = (type, name) => {
+  const handleNodeTypeChange = (type: string[], name) => {
     const targetNode = tableColumns?.find(n => n.name === name);
     if (targetNode) {
       let newNode;
-      if (type.includes('category')) {
-        const category = type.split('-')[1];
+      if (type[0].includes('category')) {
+        const category = type[0].split('-')[1];
         newNode = { ...targetNode, category };
+      } else if (type.includes('DATE')) {
+        newNode = { ...targetNode, type: type[1], dateFormat: type[0] };
       } else {
-        newNode = { ...targetNode, type: type };
+        newNode = { ...targetNode, type: type[0] };
       }
       const newHierarchy = updateNode(
         tableColumns,
@@ -189,11 +198,17 @@ const DataModelTree: FC = memo(() => {
         const newTargetBranch = CloneValueDeep(targetBranch);
         if (newTargetBranch.children) {
           let newNode = newTargetBranch.children[newNodeIndex];
-          if (type.includes('category')) {
-            const category = type.split('-')[1];
+          if (type[0].includes('category')) {
+            const category = type[0].split('-')[1] as ColumnCategories;
             newNode = { ...newNode, category };
+          } else if (type.includes('DATE')) {
+            newNode = {
+              ...newNode,
+              type: type[1] as DataViewFieldType,
+              dateFormat: type[0] as DateFormat,
+            };
           } else {
-            newNode = { ...newNode, type: type };
+            newNode = { ...newNode, type: type[0] as DataViewFieldType };
           }
           newTargetBranch.children[newNodeIndex] = newNode;
           const newHierarchy = updateNode(
@@ -546,37 +561,27 @@ const DataModelTree: FC = memo(() => {
         return Promise.reject('field is empty');
       }
 
-      let validComputedField = true;
       try {
-        validComputedField = await checkComputedFieldAsync(
-          sourceId,
-          field.expression,
-        );
+        await checkComputedFieldAsync(sourceId, field.expression);
       } catch (error) {
-        validComputedField = false;
+        message.error(error as any);
+        return;
       }
 
-      if (!validComputedField) {
-        message.error('validate function computed field failed');
-        return Promise.reject('validate function computed field failed');
-      }
       const otherComputedFields = computedFields?.filter(
-        f => f.id !== originId,
+        f => f.name !== originId,
       );
       const isNameConflict = !!otherComputedFields?.find(
-        f => f.id === field?.id,
+        f => f.name === field?.name,
       );
       if (isNameConflict) {
-        message.error(
-          'The computed field has already been exist, please choose another one!',
-        );
-        return Promise.reject(
-          'The computed field has already been exist, please choose another one!',
-        );
+        const errorMsg = message.error(t('computedFieldNameExistWarning'));
+        message.error(errorMsg);
+        return Promise.reject(errorMsg);
       }
 
       const currentFieldIndex = (computedFields || []).findIndex(
-        f => f.id === originId,
+        f => f.name === originId,
       );
 
       if (currentFieldIndex >= 0) {
@@ -584,10 +589,7 @@ const DataModelTree: FC = memo(() => {
           computedFields,
           currentFieldIndex,
           {
-            type: field.type,
-            id: field.id,
-            expression: field.expression,
-            category: field.category,
+            ...field,
             isViewComputedFields: true,
           },
         );
@@ -600,11 +602,11 @@ const DataModelTree: FC = memo(() => {
       ]);
       handleDataModelComputerFieldChange(newComputedFields);
     },
-    [computedFields, sourceId, handleDataModelComputerFieldChange],
+    [computedFields, handleDataModelComputerFieldChange, sourceId, t],
   );
 
   const addCallback = useCallback(
-    field => {
+    (field?: ChartDataViewMeta) => {
       (showModal as Function)({
         title: t('model.createComputedFields'),
         modalSize: StateModalSize.MIDDLE,
@@ -620,7 +622,7 @@ const DataModelTree: FC = memo(() => {
           />
         ),
         onOk: newField =>
-          handleAddNewOrUpdateComputedField(newField, field?.id),
+          handleAddNewOrUpdateComputedField(newField, field?.name),
       });
     },
     [
@@ -637,7 +639,7 @@ const DataModelTree: FC = memo(() => {
   const titleAdd = useMemo(() => {
     return {
       items: [{ key: 'computerField', text: t('model.createComputedFields') }],
-      callback: () => addCallback(null),
+      callback: () => addCallback(),
     };
   }, [addCallback, t]);
 
@@ -647,7 +649,7 @@ const DataModelTree: FC = memo(() => {
         addCallback(node);
       } else if (key === 'delete') {
         const newComputedFields = updateBy(computedFields, draft => {
-          const index = draft!.findIndex(v => v.id === node.id);
+          const index = draft!.findIndex(v => v.name === node.name);
           draft!.splice(index, 1);
         });
 

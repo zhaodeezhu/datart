@@ -25,13 +25,13 @@ import {
   ControllerFacadeTypes,
   ControllerVisibilityTypes,
   DataViewFieldType,
+  DateFormat,
   FieldFormatType,
   FilterConditionType,
   FilterRelationType,
   SortActionType,
 } from 'app/constants';
-import { ChartDataRequestFilter } from 'app/types/ChartDataRequest';
-import ChartDataSetDTO from 'app/types/ChartDataSet';
+import { PendingChartDataRequestFilter } from 'app/types/ChartDataRequest';
 import {
   FilterSqlOperator,
   NumberUnitKey,
@@ -39,7 +39,6 @@ import {
   RUNTIME_FILTER_KEY,
 } from 'globalConstants';
 import { ValueOf } from 'types';
-import { IChartDrillOption } from './ChartDrillOption';
 
 export type FilterFieldAction = {
   condition?: FilterCondition;
@@ -97,8 +96,10 @@ export type RelationFilterValue = {
   key: string;
   label: string;
   index?: number;
+  childIndex?: number;
   isSelected?: boolean;
   children?: RelationFilterValue[];
+  selectable?: boolean;
 };
 
 export type AggregateLimit = Pick<typeof AggregateFieldActionType, 'Count'>;
@@ -119,6 +120,7 @@ export type ChartDataSectionField = {
   color?: ColorFieldAction;
   size?: number;
   path?: string[];
+  dateFormat?: DateFormat;
 };
 
 export type SortFieldAction = {
@@ -179,6 +181,7 @@ export type ChartDataConfig = ChartConfigBase & {
   actions?: Array<ValueOf<typeof ChartDataSectionFieldActionType>> | object;
   limit?: null | number | string | number[] | string[];
   disableAggregate?: boolean;
+  disableAggregateComputedField?: boolean;
   drillable?: boolean;
   drillContextMenuVisible?: boolean;
   options?: {
@@ -190,10 +193,16 @@ export type ChartDataConfig = ChartConfigBase & {
   // NOTE: keep field's filter relation for filter arrangement feature
   fieldRelation?: FilterCondition;
   // Runtime filters
-  [RUNTIME_FILTER_KEY]?: ChartDataRequestFilter[];
+  [RUNTIME_FILTER_KEY]?: PendingChartDataRequestFilter[];
 };
 
-export type ChartStyleConfig = ChartConfigBase & ChartStyleSectionGroup & {};
+export type ChartStyleSectionTemplate = {
+  template?: ChartStyleSectionRow;
+};
+
+export type ChartStyleConfig = ChartConfigBase &
+  ChartStyleSectionGroup &
+  ChartStyleSectionTemplate;
 
 export type ChartStyleSectionGroup = ChartStyleSectionRow & {
   rows?: ChartStyleSectionGroup[];
@@ -240,6 +249,12 @@ export type ChartStyleSectionRowOption = {
   translateItemLabel?: boolean;
 
   /**
+   * Only GroupLayout is used
+   * */
+  flatten?: boolean;
+  title?: string;
+
+  /**
    * Other Free Property
    */
   [key: string]: any;
@@ -269,22 +284,6 @@ export type ChartConfig = {
   i18ns?: ChartI18NSectionConfig[];
 };
 
-export interface ChartOptions {
-  config: ChartConfig;
-  dataset: ChartDataSetDTO;
-  widgetSpecialConfig: { env: string | undefined; [x: string]: any };
-  drillOption?: IChartDrillOption;
-  selectedItems?: SelectedItem[];
-}
-
-export interface ChartContext {
-  document: Document;
-  height: number;
-  width: number;
-  translator: (key: string, disablePrefix?: boolean, options?: any) => any;
-  window: Window;
-}
-
 export interface LineStyle {
   color: string;
   type: string;
@@ -312,8 +311,15 @@ export type AxisLabel = {
   rotate?: number | null;
   show: boolean;
   width?: string | number;
+  formatter?: string;
   font?: FontStyle;
 } & FontStyle;
+
+export type EmphasisStyle = {
+  label?: {
+    show?: boolean;
+  } & FontStyle;
+};
 
 export type LabelStyle = {
   label?: {
@@ -323,6 +329,7 @@ export type LabelStyle = {
     formatter?: string | ((params) => string);
   } & FontStyle;
   labelLayout?: { hideOverlap: boolean };
+  emphasis?: EmphasisStyle;
 };
 
 export interface LegendStyle {
@@ -427,7 +434,7 @@ export interface GridStyle {
 }
 
 export interface SelectedItem {
-  index: string | number;
+  index: string;
   data: {
     rowData: {
       [p: string]: any;

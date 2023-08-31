@@ -32,7 +32,6 @@ import datart.core.data.provider.StdSqlOperator;
 import datart.core.entity.*;
 import datart.core.mappers.ext.ShareMapperExt;
 import datart.core.mappers.ext.UserMapperExt;
-import datart.security.base.PasswordToken;
 import datart.security.base.ResourceType;
 import datart.security.exception.PermissionDeniedException;
 import datart.security.util.AESUtil;
@@ -161,6 +160,10 @@ public class ShareServiceImpl extends BaseService implements ShareService {
         } else {
             update.setRowPermissionBy(ShareRowPermissionBy.CREATOR.name());
         }
+
+        if (ShareAuthenticationMode.CODE.equals(updateParam.getAuthenticationMode()) && !ShareAuthenticationMode.CODE.name().equals(update.getAuthenticationMode())) {
+            update.setAuthenticationCode(SecurityUtils.randomPassword());
+        }
         update.setAuthenticationMode(updateParam.getAuthenticationMode().name());
 
         Set<String> roleIds = new HashSet<>();
@@ -176,10 +179,6 @@ public class ShareServiceImpl extends BaseService implements ShareService {
             }
         }
 
-        if (ShareAuthenticationMode.CODE.equals(updateParam.getAuthenticationMode())) {
-            update.setAuthenticationCode(SecurityUtils.randomPassword());
-        }
-
         update.setRoles(JSON.toJSONString(roleIds));
         update.setUpdateBy(getCurrentUser().getId());
         update.setUpdateTime(new Date());
@@ -189,6 +188,11 @@ public class ShareServiceImpl extends BaseService implements ShareService {
         BeanUtils.copyProperties(update, shareInfo);
         shareInfo.setId(update.getId());
         shareInfo.setAuthenticationMode(updateParam.getAuthenticationMode());
+        //返回基本信息,防止用户更新后再次点击操作基础信息丢失
+        shareInfo.setRowPermissionBy(updateParam.getRowPermissionBy());
+        shareInfo.setRoles(updateParam.getRoles());
+        shareInfo.setUsers(updateParam.getUsers());
+
         return shareInfo;
     }
 
@@ -408,7 +412,7 @@ public class ShareServiceImpl extends BaseService implements ShareService {
                 if (ShareRowPermissionBy.CREATOR.name().equals(share.getRowPermissionBy())) {
                     return;
                 }
-                getSecurityManager().login(new PasswordToken(shareToken.getUsername(), shareToken.getPassword(), System.currentTimeMillis()));
+                getSecurityManager().runAs(shareToken.getUsername());
                 if (getSecurityManager().isOrgOwner(share.getOrgId())) {
                     return;
                 }
@@ -482,7 +486,12 @@ public class ShareServiceImpl extends BaseService implements ShareService {
             BeanUtils.copyProperties(share, authorizedToken);
             authorizedToken.setVizType(ResourceType.valueOf(share.getVizType()));
             if (ShareRowPermissionBy.CREATOR.name().equals(share.getRowPermissionBy())) {
-                User user = retrieve(share.getCreateBy(), User.class, false);
+                String shareCreateBy = share.getCreateBy();
+                if (shareCreateBy.startsWith(AttachmentService.SHARE_USER)) {
+                    shareCreateBy = shareCreateBy.replace(AttachmentService.SHARE_USER, "");
+                    authorizedToken.setCreateBy(shareCreateBy);
+                }
+                User user = retrieve(shareCreateBy, User.class, false);
                 authorizedToken.setPermissionBy(user.getUsername());
             } else {
                 authorizedToken.setPermissionBy(shareToken.getUsername());

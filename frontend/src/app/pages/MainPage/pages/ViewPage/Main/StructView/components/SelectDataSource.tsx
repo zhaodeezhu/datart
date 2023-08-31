@@ -260,7 +260,7 @@ const SelectDataSource = memo(
     }, [sourceId, sources, type]);
 
     useEffect(() => {
-      if (type === 'MAIN' && structure?.table.length && !selectedTableSchema) {
+      if (type === 'MAIN' && structure?.table.length) {
         setCurrentSources(sources.find(v => v.id === sourceId) || null);
         setSelectedTableSchema({
           table: structure.table,
@@ -268,13 +268,13 @@ const SelectDataSource = memo(
         });
       }
 
-      if (type === 'JOINS' && joinTable?.table && !selectedTableSchema) {
+      if (type === 'JOINS' && joinTable?.table) {
         setSelectedTableSchema({
           table: joinTable['table'],
           columns: joinTable['columns'],
         });
       }
-    }, []);
+    }, [structure, type, joinTable, sources, sourceId]);
 
     return (
       <>

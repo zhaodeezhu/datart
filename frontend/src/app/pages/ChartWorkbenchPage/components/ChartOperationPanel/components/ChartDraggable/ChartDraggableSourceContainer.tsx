@@ -84,6 +84,7 @@ export const ChartDraggableSourceContainer: FC<
   viewType,
   displayName,
   folderRole,
+  dateFormat,
   onDeleteComputedField,
   onEditComputedField,
   onSelectionChange,
@@ -103,7 +104,7 @@ export const ChartDraggableSourceContainer: FC<
       item: selectedItems?.length
         ? selectedItems.map(item => buildDragItem(item))
         : buildDragItem(
-            { id: colName, type, subType, category, name: colName },
+            { type, subType, category, name: colName, dateFormat },
             children,
           ),
       collect: monitor => ({
@@ -324,8 +325,7 @@ export const ChartDraggableSourceContainer: FC<
       )
       .map(item => (
         <ChartDraggableSourceContainer
-          key={item.id}
-          id={item.id}
+          key={item.name}
           name={item.name}
           displayName={item.displayName}
           category={item.category}
@@ -342,6 +342,7 @@ export const ChartDraggableSourceContainer: FC<
           onClearCheckedList={onClearCheckedList}
           onSelectionChange={onSelectionChange}
           selectedItems={selectedItems}
+          dateFormat={item.dateFormat}
         />
       ));
   }, [

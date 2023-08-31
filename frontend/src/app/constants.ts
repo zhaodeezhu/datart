@@ -27,6 +27,7 @@ export enum TenantManagementMode {
 export enum ControllerFacadeTypes {
   DropdownList = 'dropdownList',
   MultiDropdownList = 'multiDropdownList',
+  DropDownTree = 'dropDownTree',
 
   RadioGroup = 'radioGroup',
   CheckboxGroup = 'checkboxGroup',
@@ -232,6 +233,7 @@ export const ChartStyleSectionComponentType = {
   INTERACTION_CROSS_FILTERING: 'interaction.crossFiltering',
   INTERACTION_VIEW_DETAIL_PANEL: 'interaction.viewDetail',
   DATA_ZOOM_PANEL: 'dataZoomPanel',
+  Y_AXIS_NUMBER_FORMAT_PANEL: 'YAxisNumberFormatPanel',
 };
 
 export enum DownloadFileType {
@@ -256,4 +258,17 @@ export enum AuthorizationStatus {
   Pending = 'pending',
   Success = 'success',
   Error = 'error',
+}
+
+export enum ChartInteractionEvent {
+  Select = 'select',
+  UnSelect = 'unSelect',
+  Drilled = 'drilled',
+  PagingOrSort = 'paging-sort-filter',
+  ChangeContext = 'rich-text-change-context',
+}
+
+export enum DateFormat {
+  DateTime = 'YYYY-MM-DD HH:mm:ss',
+  Date = 'YYYY-MM-DD',
 }

@@ -113,8 +113,7 @@ export const ChartDraggableSourceGroupContainer: FC<{
         renderItem={item => (
           <Item onClick={stopPPG}>
             <ChartDraggableSourceContainer
-              key={item.id}
-              id={item.id}
+              key={item.name}
               name={item.name}
               displayName={item.displayName}
               category={item.category}
@@ -133,6 +132,7 @@ export const ChartDraggableSourceGroupContainer: FC<{
               onSelectionChange={onDataItemSelectionChange}
               onClearCheckedList={onClearCheckedList}
               isActive={selectedItemsIds.includes(item.name)}
+              dateFormat={item.dateFormat}
             />
           </Item>
         )}

@@ -18,15 +18,17 @@
 
 import echartsDefaultTheme from 'app/assets/theme/echarts_default_theme.json';
 import {
+  AggregateFieldActionType,
   ChartDataSectionType,
   ChartDataViewFieldCategory,
+  DataViewFieldType,
   FieldFormatType,
   RUNTIME_DATE_LEVEL_KEY,
 } from 'app/constants';
 import { ChartDataSet, ChartDataSetRow } from 'app/models/ChartDataSet';
 import { DrillMode } from 'app/models/ChartDrillOption';
-import { ChartSelection } from 'app/models/ChartSelection';
-import { ChartMouseEvent } from 'app/types/Chart';
+import { FieldTemplate } from 'app/pages/ChartWorkbenchPage/components/ChartOperationPanel/components/ChartDataViewPanel/components/utils';
+import { DATE_LEVELS } from 'app/pages/ChartWorkbenchPage/slice/constant';
 import {
   AxisLabel,
   AxisLineStyle,
@@ -60,7 +62,11 @@ import ChartMetadata from 'app/types/ChartMetadata';
 import { updateBy } from 'app/utils/mutation';
 import { ECharts } from 'echarts';
 import { ECBasicOption } from 'echarts/types/dist/shared';
-import { NumberUnitKey, NumericUnitDescriptions } from 'globalConstants';
+import {
+  DATE_LEVEL_DELIMITER,
+  NumberUnitKey,
+  NumericUnitDescriptions,
+} from 'globalConstants';
 import moment from 'moment';
 import { Debugger } from 'utils/debugger';
 import {
@@ -1065,7 +1071,7 @@ export function transformToObjectArray(
       for (let j = 0, outerLength = result.length; j < outerLength; j++) {
         let objCol: any = {};
         for (let i = 0, innerLength = metas.length; i < innerLength; i++) {
-          const key = metas?.[i]?.name;
+          const key = metas?.[i]?.name?.[0];
           if (!!key) {
             objCol[key] = columns[j][i];
           }
@@ -1599,14 +1605,13 @@ export const getRuntimeDateLevelFields = (rows: any) => {
 export const getRuntimeComputedFields = (
   dateLevelComputedFields,
   replacedConfig?: ChartDataSectionField,
-  computedFields?,
+  computedFields?: ChartDataViewMeta[],
   isRuntime?: boolean,
 ) => {
   let _computedFields = computedFields ? CloneValueDeep(computedFields) : [];
-
   if (isRuntime && replacedConfig?.field) {
     const index = getRuntimeDateLevelFields(_computedFields).findIndex(
-      v => v.id === replacedConfig?.colName,
+      v => v.name === replacedConfig?.colName,
     );
     const replacedConfigIndex = dateLevelComputedFields.findIndex(
       v => v.field === replacedConfig?.field,
@@ -1617,7 +1622,7 @@ export const getRuntimeComputedFields = (
       if (dateLevelConfig) {
         draft[index][RUNTIME_DATE_LEVEL_KEY] = {
           category: dateLevelConfig.category,
-          id: dateLevelConfig.colName,
+          name: dateLevelConfig.colName,
           type: dateLevelConfig.type,
           expression: dateLevelConfig.expression,
         };
@@ -1638,7 +1643,7 @@ export const getRuntimeComputedFields = (
           _computedFields = updateBy(_computedFields, draft => {
             draft.push({
               category: v.category,
-              id: v.colName,
+              name: v.colName,
               type: v.type,
               expression: v.expression,
             });
@@ -1648,7 +1653,7 @@ export const getRuntimeComputedFields = (
     }
     if (replacedConfig) {
       _computedFields = _computedFields.filter(
-        v => v.id !== replacedConfig.colName,
+        v => v.name !== replacedConfig.colName,
       );
     }
   }
@@ -1751,26 +1756,14 @@ export const compareSelectedItems = (
   return false;
 };
 
-/**
- * Get chart select option class.
- *
- * @param {Window} window
- * @param {ChartSelectionOptions} [options]
- * @return {Object}  ChartSelection
- */
-export const getChartSelection = (
-  window: Window,
-  options?: { chart: ECharts; mouseEvents?: ChartMouseEvent[] },
-) => {
-  return new ChartSelection(window, options);
-};
-
 export function getAllColumnInMeta(
   meta?: ChartDataViewMeta[],
-): ChartDataViewMeta[] | undefined {
-  return meta?.reduce<ChartDataViewMeta[]>((arr, cur) => {
-    return cur.children ? arr.concat(cur.children) : arr.concat([cur]);
-  }, []);
+): ChartDataViewMeta[] {
+  return (
+    meta?.reduce<ChartDataViewMeta[]>((arr, cur) => {
+      return cur.children ? arr.concat(cur.children) : arr.concat([cur]);
+    }, []) || []
+  );
 }
 
 /**
@@ -1818,8 +1811,74 @@ export function mergeChartAndViewComputedField(
   chartComputer?: ChartDataViewMeta[],
 ) {
   viewComputer = viewComputer || [];
+
   return UniqWith(
     viewComputer.concat(chartComputer || []),
-    (a, b) => a?.id === b?.id,
+    (a, b) => a?.name === b?.name,
   );
+}
+
+export function createDateLevelComputedFieldForConfigComputedFields(
+  meta?: ChartDataViewMeta[],
+  computedFields?: ChartDataViewMeta[],
+): ChartDataViewMeta[] {
+  if (!meta) {
+    return [];
+  }
+  const dateFields =
+    getAllColumnInMeta(meta)?.filter(v => v.type === DataViewFieldType.DATE) ||
+    [];
+  const allDateLevelComputedFields: ChartDataViewMeta[] = [];
+  const notDateLevelComputedFields =
+    computedFields?.filter(
+      field =>
+        field.category !== ChartDataViewFieldCategory.DateLevelComputedField,
+    ) || [];
+
+  dateFields.forEach(field => {
+    DATE_LEVELS.forEach(v => {
+      allDateLevelComputedFields.push({
+        category: ChartDataViewFieldCategory.DateLevelComputedField,
+        name: field.name + DATE_LEVEL_DELIMITER + v.expression,
+        type: field.type,
+        expression: `${v.expression}(${FieldTemplate(field.path)})`,
+      });
+    });
+  });
+
+  return allDateLevelComputedFields.concat(notDateLevelComputedFields);
+}
+
+export function filterCurrentUsedComputedFields(
+  chartConfig?: ChartConfig,
+  computedFields?: ChartDataViewMeta[],
+): ChartDataViewMeta[] {
+  const fieldsNameList = (chartConfig?.datas || [])
+    .flatMap(config => config.rows || [])
+    .flatMap(row => row?.colName || []);
+
+  const currentUsedDateComputedFields =
+    computedFields?.filter(
+      field =>
+        field.category === ChartDataViewFieldCategory.DateLevelComputedField &&
+        fieldsNameList.includes(field.name),
+    ) || [];
+  const notDateLevelComputedFields =
+    computedFields?.filter(
+      field =>
+        field.category !== ChartDataViewFieldCategory.DateLevelComputedField,
+    ) || [];
+
+  return notDateLevelComputedFields.concat(currentUsedDateComputedFields);
+}
+
+export function hasAggregationFunction(exp?: string) {
+  return [
+    AggregateFieldActionType.Avg,
+    AggregateFieldActionType.Count,
+    AggregateFieldActionType.Count_Distinct,
+    AggregateFieldActionType.Max,
+    AggregateFieldActionType.Min,
+    AggregateFieldActionType.Sum,
+  ].some(agg => new RegExp(`${agg}\\(`, 'i').test(exp || ''));
 }

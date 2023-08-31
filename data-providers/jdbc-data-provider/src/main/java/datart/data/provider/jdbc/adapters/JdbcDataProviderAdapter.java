@@ -51,6 +51,7 @@ import java.lang.reflect.Constructor;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Setter
@@ -172,7 +173,7 @@ public class JdbcDataProviderAdapter implements Closeable {
             try (ResultSet columns = metadata.getColumns(database, null, table, null)) {
                 while (columns.next()) {
                     Column column = readTableColumn(columns);
-                    column.setForeignKeys(importedKeys.get(column.getName()));
+                    column.setForeignKeys(importedKeys.get(column.columnKey()));
                     columnSet.add(column);
                 }
             }
@@ -181,14 +182,14 @@ public class JdbcDataProviderAdapter implements Closeable {
     }
 
     public String getQueryKey(QueryScript script, ExecuteParam executeParam) throws SqlParseException {
-        SqlScriptRender render = new SqlScriptRender(script, executeParam, getSqlDialect(), jdbcProperties.isEnableSpecialSql());
+        SqlScriptRender render = new SqlScriptRender(script, executeParam, getSqlDialect(), jdbcProperties.isEnableSpecialSql(), driverInfo.getQuoteIdentifiers());
         return "Q" + DigestUtils.md5Hex(render.render(true, supportPaging(), true));
     }
 
     protected Column readTableColumn(ResultSet columnMetadata) throws SQLException {
         Column column = new Column();
         column.setName(columnMetadata.getString(4));
-        column.setType(DataTypeUtils.sqlType2DataType(columnMetadata.getString(6)));
+        column.setType(DataTypeUtils.jdbcType2DataType(columnMetadata.getInt(5)));
         return column;
     }
 
@@ -393,9 +394,9 @@ public class JdbcDataProviderAdapter implements Closeable {
     protected List<Column> getColumns(ResultSet rs) throws SQLException {
         ArrayList<Column> columns = new ArrayList<>();
         for (int i = 1; i <= rs.getMetaData().getColumnCount(); i++) {
-            String columnTypeName = rs.getMetaData().getColumnTypeName(i);
+            int columnType = rs.getMetaData().getColumnType(i);
             String columnName = rs.getMetaData().getColumnLabel(i);
-            ValueType valueType = DataTypeUtils.sqlType2DataType(columnTypeName);
+            ValueType valueType = DataTypeUtils.jdbcType2DataType(columnType);
             columns.add(Column.of(valueType, columnName));
         }
         return columns;
@@ -405,18 +406,40 @@ public class JdbcDataProviderAdapter implements Closeable {
      * 本地执行，从数据源拉取全量数据，在本地执行聚合操作
      */
     public Dataframe executeInLocal(QueryScript script, ExecuteParam executeParam) throws Exception {
+
+        List<SelectColumn> selectColumns = null;
+        // 构建执行参数，查询源表全量数据
+        if (!CollectionUtils.isEmpty(script.getSchema())) {
+            selectColumns = script.getSchema().values().parallelStream().map(column -> {
+                SelectColumn selectColumn = new SelectColumn();
+                selectColumn.setColumn(column.getName());
+                selectColumn.setAlias(column.columnKey());
+                return selectColumn;
+            }).collect(Collectors.toList());
+        }
+        ExecuteParam tempExecuteParam = ExecuteParam.builder()
+                .columns(selectColumns)
+                .concurrencyOptimize(true)
+                .cacheEnable(executeParam.isCacheEnable())
+                .cacheExpires(executeParam.getCacheExpires())
+                .concurrencyOptimize(executeParam.isConcurrencyOptimize())
+                .build();
+
         SqlScriptRender render = new SqlScriptRender(script
-                , executeParam
-                , getSqlDialect());
-        String sql = render.render(false, false, false);
+                , tempExecuteParam
+                , getSqlDialect()
+                , jdbcProperties.isEnableSpecialSql()
+                , driverInfo.getQuoteIdentifiers());
+        String sql = render.render(true, false, false);
         Dataframe data = execute(sql);
+
         if (!CollectionUtils.isEmpty(script.getSchema())) {
             for (Column column : data.getColumns()) {
-                column.setType(script.getSchema().getOrDefault(column.getName(), column).getType());
+                column.setType(script.getSchema().getOrDefault(column.columnKey(), column).getType());
             }
         }
         data.setName(script.toQueryKey());
-        return LocalDB.executeLocalQuery(null, executeParam, Dataframes.of(script.getSourceId(), data));
+        return LocalDB.executeLocalQuery(script, executeParam, data.splitByTable(script.getSchema()));
     }
 
     /**
@@ -430,7 +453,8 @@ public class JdbcDataProviderAdapter implements Closeable {
         SqlScriptRender render = new SqlScriptRender(script
                 , executeParam
                 , getSqlDialect()
-                , jdbcProperties.isEnableSpecialSql());
+                , jdbcProperties.isEnableSpecialSql()
+                , driverInfo.getQuoteIdentifiers());
 
         if (supportPaging()) {
             sql = render.render(true, true, false);
@@ -460,5 +484,4 @@ public class JdbcDataProviderAdapter implements Closeable {
         }
         return obj;
     }
-
 }
